@@ -12,8 +12,6 @@ if (container) {
   root.render(
     <React.StrictMode>
       <Landing />
-      <Signup />
-      <Login />
     </React.StrictMode>
   );
 }
