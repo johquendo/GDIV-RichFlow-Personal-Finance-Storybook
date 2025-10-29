@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               Int               @id @default(autoincrement())
+  email            String            @unique
+  password         String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  balanceSheets    BalanceSheet[]
+  incomeStatements IncomeStatement[]
+  sessions         Session[]
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  token     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  isValid   Boolean  @default(true)
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model IncomeStatement {
+  id       Int          @id @default(autoincrement())
+  userId   Int
+  expenses Expense[]
+  incomes  IncomeLine[]
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model IncomeLine {
+  id              Int             @id @default(autoincrement())
+  name            String
+  amount          Float
+  type            String
+  isId            Int
+  incomeStatement IncomeStatement @relation(fields: [isId], references: [id], onDelete: Cascade)
+}
+
+model Expense {
+  id              Int             @id @default(autoincrement())
+  name            String
+  amount          Float
+  isId            Int
+  incomeStatement IncomeStatement @relation(fields: [isId], references: [id], onDelete: Cascade)
+}
+
+model BalanceSheet {
+  id          Int         @id @default(autoincrement())
+  userId      Int
+  assets      Asset[]
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  liabilities Liability[]
+}
+
+model Asset {
+  id           Int          @id @default(autoincrement())
+  name         String
+  value        Float
+  bsId         Int
+  balanceSheet BalanceSheet @relation(fields: [bsId], references: [id], onDelete: Cascade)
+}
+
+model Liability {
+  id           Int          @id @default(autoincrement())
+  name         String
+  value        Float
+  bsId         Int
+  balanceSheet BalanceSheet @relation(fields: [bsId], references: [id], onDelete: Cascade)
+}
