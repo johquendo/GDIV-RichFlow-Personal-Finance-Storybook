@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-ts"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              Int               @id @default(autoincrement())
+  email           String            @unique
+  password        String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime
+  BalanceSheet    BalanceSheet[]
+  IncomeStatement IncomeStatement[]
+  Session         Session[]
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  token     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  isValid   Boolean  @default(true)
+  userId    Int
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Expense {
+  id              Int             @id @default(autoincrement())
+  name            String
+  amount          Float
+  isId            Int
+  IncomeStatement IncomeStatement @relation(fields: [isId], references: [id], onDelete: Cascade)
+}
+
+model Asset {
+  id           Int          @id @default(autoincrement())
+  name         String
+  value        Float
+  bsId         Int
+  BalanceSheet BalanceSheet @relation(fields: [bsId], references: [id], onDelete: Cascade)
+}
+
+model Liability {
+  id           Int          @id @default(autoincrement())
+  name         String
+  value        Float
+  bsId         Int
+  BalanceSheet BalanceSheet @relation(fields: [bsId], references: [id], onDelete: Cascade)
+}
+
+model BalanceSheet {
+  id        Int         @id @default(autoincrement())
+  userId    Int
+  Asset     Asset[]
+  User      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Liability Liability[]
+}
+
+model IncomeLine {
+  id              Int             @id @default(autoincrement())
+  name            String
+  amount          Float
+  type            String
+  isId            Int
+  IncomeStatement IncomeStatement @relation(fields: [isId], references: [id], onDelete: Cascade)
+}
+
+model IncomeStatement {
+  id         Int          @id @default(autoincrement())
+  userId     Int
+  Expense    Expense[]
+  IncomeLine IncomeLine[]
+  User       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
