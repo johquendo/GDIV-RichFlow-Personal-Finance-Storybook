@@ -8,7 +8,7 @@ interface SignupResponse {
     createdAt: string;
     updatedAt: string;
   };
-  error?: string;
+  
 }
 
 async function testSignup(): Promise<void> {
