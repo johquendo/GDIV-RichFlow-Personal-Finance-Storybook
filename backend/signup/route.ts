@@ -6,12 +6,12 @@ const prisma = new PrismaClient();
 
 export async function signup(req: Request, res: Response) {
   try {
-    const { email, password } = req.body;
+    const { name, email, password } = req.body;
 
     // Validate input
-    if (!email || !password) {
+    if (!name || !email || !password) {
       return res.status(400).json({
-        error: 'Email and password are required'
+        error: 'Name, email, and password are required'
       });
     }
 
@@ -32,15 +32,19 @@ export async function signup(req: Request, res: Response) {
     // Create user
     const user = await prisma.user.create({
       data: {
+        name,
         email,
         password: hashedPassword,
         updatedAt: new Date(),
+        lastLogin: null
       },
       select: {
         id: true,
+        name: true,
         email: true,
         createdAt: true,
         updatedAt: true,
+        lastLogin: true,
       }
     });
 
