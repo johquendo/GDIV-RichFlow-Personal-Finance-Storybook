@@ -79,3 +79,6 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 12px 30px rgba(115, 69, 175, 0.5);
 }
 
+.input{
+  padding-left: 10px;
+}

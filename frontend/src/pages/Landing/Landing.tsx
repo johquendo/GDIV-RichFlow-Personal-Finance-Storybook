@@ -1,35 +1,19 @@
 import React from 'react';
 import './Landing.css';
+import LandingNavbar from '../../components/LandingNavbar/LandingNavbar'
+import Dashboard from '../Dashboard/Dashboard';
+import { Link } from 'react-router-dom'
+
 
 
 const Landing: React.FC = () => {
   return (
-    <div className="text-white" style={{ background: 'linear-gradient(to bottom right, #7345AF, #7345AF, #1E1E1E, #000000)', minHeight: '100vh' }}>
+    <div className="text-white flex flex-col items-center justify-center w-screen h-screen" style={{ background: 'linear-gradient(to bottom right, #7345AF, #7345AF, #1E1E1E, #000000)'}}>
       {/* Header */}
-      <header className="bg-dark px-8 py-6">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-dark rounded-full flex items-center justify-center">
-              <img src="/assets/richflow.png" alt="RichFlow Logo" />
-            </div>
-            <span className="text-5xl font-bold text-gold">RichFlow</span>
-          </div>
-          
-          {/* Navigation */}
-          <nav className="flex gap-4">
-            <button className="bg-purple text-gold px-8 py-3 rounded-2xl font-bold text-xl hover:bg-opacity-90 transition btn-hover-effect">
-              Log in
-            </button>
-            <button className="bg-purple text-gold px-8 py-3 rounded-2xl font-bold text-xl hover:bg-opacity-90 transition btn-hover-effect">
-              Sign up
-            </button>
-          </nav>
-        </div>
-      </header>
-
+      <LandingNavbar/>
       {/* Hero Section */}
-      <main style={{ minHeight: 'calc(100vh - 96px)' }} className="flex items-center justify-center px-8 py-20">
-        <div className="max-w-5xl mx-auto text-center">
+      <main className="flex h-[90vh] flex-col gap-4 items-center justify-center px-8 py-20">
+        <div className="max-w-5xl mx-auto flex items-center justify-center flex-col gap-4 text-center">
           {/* Main Headline */}
           <h1 className="text-6xl md:text-7xl font-bold text-gold mb-8 leading-tight">
             See Where Your <span className="text-white">Money Flows</span> — and Make It Work for You.
@@ -41,12 +25,14 @@ const Landing: React.FC = () => {
           </p>
           
           {/* CTA Button */}
-            <button 
-            className="text-gold px-12 py-5 rounded-2xl ctext-3xl font-bold hover:bg-opacity-80 transition shadow-lg cta-button"
-            style={{ background: 'linear-gradient(to bottom right, #7345AF, #7345AF, #1E1E1E, #000000)' }}
-            >
-            Get Started
-            </button>
+            <Link to="/dashboard">
+              <button 
+              className="text-gold px-12 h-[50px] w-[150px] py-5 rounded-2xl ctext-3xl font-bold hover:bg-opacity-80 transition shadow-lg cta-button"
+              style={{ background: 'linear-gradient(to bottom right, #7345AF, #7345AF, #1E1E1E, #000000)' }}
+              >
+              Get Started
+              </button>
+            </Link>
         </div>
       </main>
     </div>
