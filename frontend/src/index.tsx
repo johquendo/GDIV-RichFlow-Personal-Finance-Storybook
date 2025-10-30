@@ -5,6 +5,7 @@ import Landing from './pages/Landing/Landing';
 import Signup from './pages/Signup/Signup';
 import Login from './pages/Login/login';
 import Dashboard from './pages/Dashboard/Dashboard';
+import Admin from './pages/Admin/Admin';
 
 const container = document.getElementById('root');
 if (!container) {
@@ -20,6 +21,7 @@ root.render(
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/admin" element={<Admin /> } />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>
