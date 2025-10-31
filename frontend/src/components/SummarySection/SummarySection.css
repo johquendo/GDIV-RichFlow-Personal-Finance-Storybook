@@ -2,12 +2,15 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0; /* Allow proper flexbox shrinking */
+  overflow: hidden; /* Prevent overflow into other sections */
 }
 
 .section-header {
   background: linear-gradient(135deg, #7345AF 0%, #9d6dd4 100%);
   padding: 1rem 2rem;
   border-radius: 8px 8px 0 0;
+  flex-shrink: 0; /* Prevent header from shrinking */
 }
 
 .section-title {
@@ -22,7 +25,8 @@
   flex: 1;
   background-color: #1E1E1E;
   padding: 2rem;
-  border-radius: 0 0 8px 8px;
+  min-height: 0; /* Allow proper scrolling if needed */
+  overflow-y: auto; /* Add scroll if content is too tall */
 }
 
 /* New styles for progress bar and savings row */
@@ -103,6 +107,8 @@
   color: #f6f6fb;
   font-weight: 700;
   font-size: 1rem;
+  flex-shrink: 0; /* Prevent savings bar from shrinking */
+  margin-top: auto; /* Push to bottom of summary section */
 }
 
 .savings-label {
