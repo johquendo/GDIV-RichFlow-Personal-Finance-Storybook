@@ -1,11 +1,11 @@
-// backend/server.ts
 import express from 'express';
-import { Pool } from 'pg'
-import bcrypt from 'bcrypt';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import cookieParser from 'cookie-parser';
 import * as path from 'path';
 import routes from './routes';
+import authRoutes from './routes/auth.routes';
+import { errorHandler } from './middleware/errorHandler.middleware';
 
 // Load environment variables from .env file
 dotenv.config({ 
@@ -14,28 +14,27 @@ dotenv.config({
 });
 
 const app = express();
+const PORT = process.env.PORT || 5000;
+
 // Simple request logger to help debug routing issues
 app.use((req, _res, next) => {
   console.log(`[server] ${req.method} ${req.url}`);
   next();
 });
-app.use(cors());
+
+// Middleware
+app.use(cors({
+  origin: 'http://localhost:3000', // Your frontend URL
+  credentials: true // Allow cookies to be sent
+}));
 app.use(express.json());
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-})
-
-const PORT = process.env.PORT || 5000;
+app.use(cookieParser()); // Parse cookies
 
 // Debug middleware to log all registered routes
 app.use((req, res, next) => {
   console.log(`[DEBUG] Incoming request: ${req.method} ${req.path}`);
   next();
 });
-
-// Import routes
-import authRoutes from './routes/auth.routes';
 
 // Configure routes
 app.use('/api', (req, res, next) => {
@@ -95,7 +94,10 @@ app.get('/debug', (req, res) => {
   });
 });
 
+// Error handling middleware (must be last)
+app.use(errorHandler);
 
+// Start server
 app.listen(PORT, () => {
-  console.log(`Server running on port http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });

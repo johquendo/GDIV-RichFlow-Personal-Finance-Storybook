@@ -1,5 +1,5 @@
 import { Router } from 'express';
-// Remove auth routes import since we're mounting them directly in server.ts
+
 const router = Router();
 
 /**
