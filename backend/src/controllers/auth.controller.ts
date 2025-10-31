@@ -188,3 +188,46 @@ export async function logoutAll(req: Request, res: Response, next: NextFunction)
   }
 }
 
+/**
+ * Get user profile
+ * @route GET /api/auth/profile
+ */
+export async function getProfile(req: Request, res: Response, next: NextFunction) {
+  try {
+    // Get user ID from authenticated request (set by authenticateToken middleware)
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    // Fetch user from database
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        createdAt: true,
+        lastLogin: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    return res.status(200).json({
+      user: {
+        id: user.id.toString(),
+        email: user.email,
+        name: user.name
+      }
+    });
+
+  } catch (error) {
+    console.error('Get profile error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import Header from '../../components/Header/Header';
 import Sidebar from '../../components/Sidebar/Sidebar';
 import IncomeSection from '../../components/IncomeSection/IncomeSection';
@@ -9,40 +10,28 @@ import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, loading } = useAuth();
 
   useEffect(() => {
-    // Check if user is authenticated
-    const token = localStorage.getItem('token');
-    
-    if (!token) {
-      // No token found, redirect to login
+    // Only redirect if loading is complete and user is not authenticated
+    if (!loading && !isAuthenticated) {
       navigate('/login');
-      return;
     }
-    
-    // Optional: Verify token is still valid with backend
-    const verifyToken = async () => {
-      try {
-        const response = await fetch('http://localhost:5000/api/auth/verify', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (!response.ok) {
-          // Token invalid, clear and redirect
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          navigate('/login');
-        }
-      } catch (error) {
-        console.error('Token verification failed:', error);
-        navigate('/login');
-      }
-    };
-    
-    verifyToken();
-  }, [navigate]);
+  }, [isAuthenticated, loading, navigate]);
+
+  // Show loading while checking authentication
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: '#000000' }}>
+        <div className="text-gold text-2xl">Loading...</div>
+      </div>
+    );
+  }
+
+  // If not authenticated after loading, don't render (will redirect)
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="dashboard-container">

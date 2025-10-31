@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { signup, login, refreshToken, logout, logoutAll } from '../controllers/auth.controller';
+import { signup, login, refreshToken, logout, logoutAll, getProfile } from '../controllers/auth.controller';
 import { validateSignup, validateLogin } from '../middleware/validation.middleware';
 import { signupLimiter, loginLimiter } from '../middleware/rateLimit.middleware';
 import { authenticateToken } from '../middleware/auth.middleware';
@@ -45,5 +45,12 @@ router.post('/logout', logout);
  * @access Private (requires authentication)
  */
 router.post('/logout-all', authenticateToken, logoutAll);
+
+/**
+ * @route GET /api/auth/profile
+ * @desc Get current user profile
+ * @access Private (requires authentication)
+ */
+router.get('/profile', authenticateToken, getProfile);
 
 export default router;

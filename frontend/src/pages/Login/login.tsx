@@ -10,7 +10,7 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Redirect to dashboard if already authenticated
+  // If already authenticated, redirect to dashboard
   useEffect(() => {
     if (!loading && isAuthenticated) {
       navigate('/dashboard', { replace: true });
@@ -24,7 +24,7 @@ const Login: React.FC = () => {
 
     try {
       await login(email, password);
-      // Navigate to dashboard (auth context will also update)
+      // Navigate to dashboard after successful login
       navigate('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
@@ -33,7 +33,7 @@ const Login: React.FC = () => {
     }
   };
 
-  // Show loading state while checking authentication
+  // Show loading while checking session
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen" style={{ background: 'linear-gradient(to bottom right, #7345AF, #7345AF, #1E1E1E, #000000)' }}>

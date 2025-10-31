@@ -7,17 +7,17 @@ const Landing: React.FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated, loading } = useAuth();
 
-  // Redirect to dashboard if user is already authenticated
+  // If already authenticated, redirect to dashboard
   useEffect(() => {
     if (!loading && isAuthenticated) {
       navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, loading, navigate]);
 
-  // Show loading state while checking authentication
+  // Show loading while checking session
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-dark">
+      <div className="flex items-center justify-center min-h-screen" style={{ background: 'linear-gradient(to bottom right, #7345AF, #7345AF, #1E1E1E, #000000)' }}>
         <div className="text-gold text-2xl">Loading...</div>
       </div>
     );
