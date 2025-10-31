@@ -70,6 +70,9 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 
     // Generate JWT token and session expiry
     const token = generateToken(foundUser.id);
+  // Dev-only: log the generated token so you can inspect it in server console
+  // WARNING: tokens are secrets — remove this log before deploying to production
+  console.log('[DEBUG] Generated token for user', foundUser.email, ':', token);
     const expiresAt = generateSessionExpiry();
 
     try {
