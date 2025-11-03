@@ -14,6 +14,8 @@ const ExpenseSection: React.FC = () => {
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<number | null>(null);
 
   // Fetch expenses on component mount
   useEffect(() => {
@@ -25,38 +27,64 @@ const ExpenseSection: React.FC = () => {
       setLoading(true);
       setError(null);
       const response = await expensesAPI.getExpenses();
-      setExpenses(response);
+      
+      console.log('Expenses API response:', response);
+      
+      // Ensure response is an array and properly formatted
+      const expensesData = Array.isArray(response) ? response.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        amount: typeof item.amount === 'number' ? item.amount : parseFloat(item.amount)
+      })) : [];
+      
+      setExpenses(expensesData);
     } catch (err: any) {
       console.error('Error fetching expenses:', err);
       setError('Failed to load expenses');
+      setExpenses([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
   };
 
   const addExpense = async () => {
-    if (!name.trim() || !amount.trim()) return;
+    if (!name.trim() || !amount.trim() || isAdding) return;
 
     try {
+      setIsAdding(true);
       setError(null);
       const response = await expensesAPI.addExpense(name, parseFloat(amount));
-      setExpenses([...expenses, response]);
+      // Backend returns { message, expense }, so extract the expense
+      const expenseData = response.expense || response;
+      const newExpense: ExpenseItem = {
+        id: expenseData.id,
+        name: expenseData.name,
+        amount: expenseData.amount
+      };
+      setExpenses([...expenses, newExpense]);
       setName('');
       setAmount('');
     } catch (err: any) {
       console.error('Error adding expense:', err);
       setError('Failed to add expense');
+    } finally {
+      setIsAdding(false);
     }
   };
 
   const deleteExpense = async (id: number) => {
+    if (isDeleting !== null) return; // Prevent multiple simultaneous deletes
+    
     try {
+      setIsDeleting(id);
       setError(null);
       await expensesAPI.deleteExpense(id);
       setExpenses(expenses.filter((expense) => expense.id !== id));
     } catch (err: any) {
       console.error('Error deleting expense:', err);
       setError('Failed to delete expense');
+    } finally {
+      setIsDeleting(null);
     }
   };
 
@@ -83,8 +111,9 @@ const ExpenseSection: React.FC = () => {
               <button
                 className="delete-btn"
                 onClick={() => deleteExpense(item.id)}
+                disabled={isDeleting === item.id}
               >
-                ✕
+                {isDeleting === item.id ? '...' : '✕'}
               </button>
             </div>
           ))
@@ -105,8 +134,12 @@ const ExpenseSection: React.FC = () => {
           />
         </div>
 
-        <button className="add-expense-btn" onClick={addExpense}>
-          + Add Expense
+        <button 
+          className="add-expense-btn" 
+          onClick={addExpense}
+          disabled={isAdding || !name.trim() || !amount.trim()}
+        >
+          {isAdding ? 'Adding...' : '+ Add Expense'}
         </button>
       </div>
     </div>

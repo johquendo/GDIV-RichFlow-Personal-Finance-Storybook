@@ -15,6 +15,8 @@ const IncomeSection: React.FC = () => {
   const [passiveIncome, setPassiveIncome] = useState<IncomeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<number | null>(null);
 
   // Fetch income data on component mount
   useEffect(() => {
@@ -27,13 +29,32 @@ const IncomeSection: React.FC = () => {
       setError(null);
       const response = await incomeAPI.getIncomeLines();
       
+      console.log('Income API response:', response);
+      
       // Ensure response is an array
       const incomeLines = Array.isArray(response) ? response : [];
       
-      // Group income by type
-      const earned = incomeLines.filter(item => item.type === 'Earned');
-      const portfolio = incomeLines.filter(item => item.type === 'Portfolio');
-      const passive = incomeLines.filter(item => item.type === 'Passive');
+      // Group income by type with proper typing
+      const earned = incomeLines.filter((item: any) => item.type === 'Earned').map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        amount: typeof item.amount === 'number' ? item.amount : parseFloat(item.amount),
+        type: 'Earned' as 'Earned'
+      }));
+      
+      const portfolio = incomeLines.filter((item: any) => item.type === 'Portfolio').map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        amount: typeof item.amount === 'number' ? item.amount : parseFloat(item.amount),
+        type: 'Portfolio' as 'Portfolio'
+      }));
+      
+      const passive = incomeLines.filter((item: any) => item.type === 'Passive').map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        amount: typeof item.amount === 'number' ? item.amount : parseFloat(item.amount),
+        type: 'Passive' as 'Passive'
+      }));
       
       setEarnedIncome(earned);
       setPortfolioIncome(portfolio);
@@ -41,6 +62,10 @@ const IncomeSection: React.FC = () => {
     } catch (err: any) {
       console.error('Error fetching income:', err);
       setError('Failed to load income data');
+      // Set empty arrays on error
+      setEarnedIncome([]);
+      setPortfolioIncome([]);
+      setPassiveIncome([]);
     } finally {
       setLoading(false);
     }
@@ -52,15 +77,20 @@ const IncomeSection: React.FC = () => {
     name: string,
     amount: string
   ) => {
-    if (!name.trim() || !amount.trim()) return;
+    if (!name.trim() || !amount.trim() || isAdding) return;
     
     try {
+      setIsAdding(true);
       setError(null);
       const type = section.charAt(0).toUpperCase() + section.slice(1) as 'Earned' | 'Portfolio' | 'Passive';
       const response = await incomeAPI.addIncomeLine(name, parseFloat(amount), type);
       
+      // Backend returns { message, incomeLine }, so extract the incomeLine
+      const incomeLineData = response.incomeLine || response;
       const newItem: IncomeItem = {
-        ...response,
+        id: incomeLineData.id,
+        name: incomeLineData.name,
+        amount: incomeLineData.amount,
         type
       };
 
@@ -70,12 +100,17 @@ const IncomeSection: React.FC = () => {
     } catch (err: any) {
       console.error('Error adding income:', err);
       setError('Failed to add income');
+    } finally {
+      setIsAdding(false);
     }
   };
 
   // handle delete income
   const handleDelete = async (section: "earned" | "portfolio" | "passive", id: number) => {
+    if (isDeleting !== null) return; // Prevent multiple simultaneous deletes
+    
     try {
+      setIsDeleting(id);
       setError(null);
       await incomeAPI.deleteIncomeLine(id);
       
@@ -85,6 +120,8 @@ const IncomeSection: React.FC = () => {
     } catch (err: any) {
       console.error('Error deleting income:', err);
       setError('Failed to delete income');
+    } finally {
+      setIsDeleting(null);
     }
   };
 
@@ -112,12 +149,13 @@ const IncomeSection: React.FC = () => {
             {items.map((item) => (
               <div key={item.id} className="income-item">
                 <span>{item.name}</span>
-                <span>${item.amount}</span>
+                <span>${typeof item.amount === 'number' ? item.amount.toFixed(2) : '0.00'}</span>
                 <button
                   className="delete-btn"
                   onClick={() => handleDelete(section, item.id)}
+                  disabled={isDeleting === item.id}
                 >
-                  ✕
+                  {isDeleting === item.id ? '...' : '✕'}
                 </button>
               </div>
             ))}
@@ -146,16 +184,41 @@ const IncomeSection: React.FC = () => {
             setSource("");
             setAmount("");
           }}
+          disabled={isAdding || !source.trim() || !amount.trim()}
         >
-          + Add {title}
+          {isAdding ? 'Adding...' : `+ Add ${title}`}
         </button>
       </div>
     );
   };
 
+  if (loading) {
+    return (
+      <div className="income-container">
+        <div className="income-header">Income</div>
+        <div className="income-sections">
+          <p style={{ textAlign: 'center', color: '#d4af37', padding: '20px' }}>Loading income data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="income-container">
       <div className="income-header">Income</div>
+      
+      {error && (
+        <div style={{ 
+          color: '#ff6b6b', 
+          textAlign: 'center', 
+          padding: '10px', 
+          backgroundColor: 'rgba(255, 107, 107, 0.1)',
+          borderRadius: '4px',
+          margin: '10px 0'
+        }}>
+          {error}
+        </div>
+      )}
 
       <div className="income-sections">
         <IncomeCard title="Earned Income" items={earnedIncome} section="earned" />
