@@ -1,40 +1,91 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { incomeAPI } from "../../utils/api";
 import "./IncomeSection.css";
 
 interface IncomeItem {
   id: number;
   name: string;
-  amount: string;
+  amount: number;
+  type: 'Earned' | 'Portfolio' | 'Passive';
 }
 
 const IncomeSection: React.FC = () => {
   const [earnedIncome, setEarnedIncome] = useState<IncomeItem[]>([]);
   const [portfolioIncome, setPortfolioIncome] = useState<IncomeItem[]>([]);
   const [passiveIncome, setPassiveIncome] = useState<IncomeItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch income data on component mount
+  useEffect(() => {
+    fetchIncomeData();
+  }, []);
+
+  const fetchIncomeData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await incomeAPI.getIncomeLines();
+      
+      // Ensure response is an array
+      const incomeLines = Array.isArray(response) ? response : [];
+      
+      // Group income by type
+      const earned = incomeLines.filter(item => item.type === 'Earned');
+      const portfolio = incomeLines.filter(item => item.type === 'Portfolio');
+      const passive = incomeLines.filter(item => item.type === 'Passive');
+      
+      setEarnedIncome(earned);
+      setPortfolioIncome(portfolio);
+      setPassiveIncome(passive);
+    } catch (err: any) {
+      console.error('Error fetching income:', err);
+      setError('Failed to load income data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // handle add income
-  const handleAddIncome = (
+  const handleAddIncome = async (
     section: "earned" | "portfolio" | "passive",
     name: string,
     amount: string
   ) => {
     if (!name.trim() || !amount.trim()) return;
-    const newItem: IncomeItem = {
-      id: Date.now(),
-      name,
-      amount: parseFloat(amount).toFixed(2),
-    };
+    
+    try {
+      setError(null);
+      const type = section.charAt(0).toUpperCase() + section.slice(1) as 'Earned' | 'Portfolio' | 'Passive';
+      const response = await incomeAPI.addIncomeLine(name, parseFloat(amount), type);
+      
+      const newItem: IncomeItem = {
+        ...response,
+        type
+      };
 
-    if (section === "earned") setEarnedIncome([...earnedIncome, newItem]);
-    if (section === "portfolio") setPortfolioIncome([...portfolioIncome, newItem]);
-    if (section === "passive") setPassiveIncome([...passiveIncome, newItem]);
+      if (section === "earned") setEarnedIncome([...earnedIncome, newItem]);
+      if (section === "portfolio") setPortfolioIncome([...portfolioIncome, newItem]);
+      if (section === "passive") setPassiveIncome([...passiveIncome, newItem]);
+    } catch (err: any) {
+      console.error('Error adding income:', err);
+      setError('Failed to add income');
+    }
   };
 
   // handle delete income
-  const handleDelete = (section: "earned" | "portfolio" | "passive", id: number) => {
-    if (section === "earned") setEarnedIncome(earnedIncome.filter((i) => i.id !== id));
-    if (section === "portfolio") setPortfolioIncome(portfolioIncome.filter((i) => i.id !== id));
-    if (section === "passive") setPassiveIncome(passiveIncome.filter((i) => i.id !== id));
+  const handleDelete = async (section: "earned" | "portfolio" | "passive", id: number) => {
+    try {
+      setError(null);
+      await incomeAPI.deleteIncomeLine(id);
+      
+      if (section === "earned") setEarnedIncome(earnedIncome.filter((i) => i.id !== id));
+      if (section === "portfolio") setPortfolioIncome(portfolioIncome.filter((i) => i.id !== id));
+      if (section === "passive") setPassiveIncome(passiveIncome.filter((i) => i.id !== id));
+    } catch (err: any) {
+      console.error('Error deleting income:', err);
+      setError('Failed to delete income');
+    }
   };
 
   // reusable income card

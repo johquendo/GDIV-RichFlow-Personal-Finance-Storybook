@@ -6,6 +6,8 @@ import * as path from 'path';
 import routes from './routes';
 import authRoutes from './routes/auth.routes';
 import cashSavingsRoutes from './routes/cashSavings.routes';
+import incomeRoutes from './routes/income.routes';
+import expenseRoutes from './routes/expense.routes';
 import { errorHandler } from './middleware/errorHandler.middleware';
 
 // Load environment variables from .env file
@@ -48,6 +50,12 @@ app.use('/api/auth', authRoutes);
 
 // Mount cash savings routes
 app.use('/api/cash-savings', cashSavingsRoutes);
+
+// Mount income routes
+app.use('/api/income', incomeRoutes);
+
+// Mount expense routes
+app.use('/api/expenses', expenseRoutes);
 
 // Mount other API routes
 app.use('/api', routes);
