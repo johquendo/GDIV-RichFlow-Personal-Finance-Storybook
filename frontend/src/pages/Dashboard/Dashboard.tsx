@@ -70,7 +70,7 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="dashboard-container">
-      <Header onAddBalanceSheet={handleAddBalanceSheet} />
+      <Header onAddBalanceSheet={handleAddBalanceSheet} balanceSheetExists={balanceSheetExists} />
       <div className="dashboard-main">
         <Sidebar />
         <main className="dashboard-content" style={{ backgroundColor: '#000000' }}>

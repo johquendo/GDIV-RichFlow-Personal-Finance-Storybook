@@ -4,9 +4,10 @@ import { useAuth } from '../../context/AuthContext';
 
 interface HeaderProps {
   onAddBalanceSheet?: () => void;
+  balanceSheetExists?: boolean;
 }
 
-const Header: React.FC<HeaderProps> = ({ onAddBalanceSheet }) => {
+const Header: React.FC<HeaderProps> = ({ onAddBalanceSheet, balanceSheetExists }) => {
   const { user } = useAuth();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -15,9 +16,14 @@ const Header: React.FC<HeaderProps> = ({ onAddBalanceSheet }) => {
     setIsDropdownOpen(!isDropdownOpen);
   };
   
-  const handleAddBalanceSheet = () => {
+  const handleBalanceSheetAction = () => {
     setIsDropdownOpen(false);
-    onAddBalanceSheet?.();
+    if (balanceSheetExists) {
+      // TODO: Implement remove balance sheet functionality
+      console.log("Remove balance sheet clicked");
+    } else {
+      onAddBalanceSheet?.();
+    }
   };
 
   // Close dropdown when clicking outside
@@ -53,13 +59,17 @@ const Header: React.FC<HeaderProps> = ({ onAddBalanceSheet }) => {
       </div>
       <div className="header-right">
         <div className="add-button-container" ref={dropdownRef}>
-          <button className="add-button" onClick={toggleDropdown} title="Add new item">
-            +
+          <button 
+            className={`add-button ${balanceSheetExists ? 'minus-button' : ''}`} 
+            onClick={toggleDropdown} 
+            title={balanceSheetExists ? "Modify Balance Sheet" : "Add new item"}
+          >
+            {balanceSheetExists ? '-' : '+'}
           </button>
           {isDropdownOpen && (
             <div className="dropdown-menu">
-              <button className="dropdown-item" onClick={handleAddBalanceSheet}>
-                Add Balance Sheet
+              <button className="dropdown-item" onClick={handleBalanceSheetAction}>
+                {balanceSheetExists ? 'Remove Balance Sheet' : 'Add Balance Sheet'}
               </button>
             </div>
           )}

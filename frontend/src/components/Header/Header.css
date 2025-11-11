@@ -89,6 +89,16 @@
   transform: scale(0.95);
 }
 
+.minus-button {
+  background-color: #7345AF;
+  color: #ffffff;
+}
+
+.minus-button:hover {
+  background-color: #9d6dd4;
+  transform: scale(1.1);
+}
+
 .dropdown-menu {
   position: absolute;
   top: 100%;
