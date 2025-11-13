@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -103,9 +103,9 @@ const Dashboard: React.FC = () => {
   return (
     <FinancialDataProvider>
       <div className="dashboard-container">
-        <Header />
+        <Header onAddBalanceSheet={handleAddBalanceSheet} onToggleBalanceSheet={handleToggleBalanceSheet} balanceSheetExists={balanceSheetExists} balanceSheetVisible={showBalanceSheet} />
         <div className="dashboard-main">
-    <Sidebar onOpenAssistant={() => setPanelOpen(true)} />
+          <Sidebar onOpenAssistant={() => setPanelOpen(true)} />
           <main className="dashboard-content" style={{ backgroundColor: '#000000' }}>
             <div className="dashboard-grid">
               <div className="grid-left">
@@ -120,6 +120,14 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
             </div>
+            {showBalanceSheet && (
+              <div className="balance-sheet-section">
+                <div className="balance-sheet-grid">
+                  <AssetsSection />
+                  <LiabilitiesSection />
+                </div>
+              </div>
+            )}
           </main>
         </div>
         <RightSidePanel isOpen={panelOpen} onClose={() => setPanelOpen(false)} title="Saki Assistant">
@@ -127,35 +135,6 @@ const Dashboard: React.FC = () => {
         </RightSidePanel>
       </div>
     </FinancialDataProvider>
-    <div className="dashboard-container">
-  <Header onAddBalanceSheet={handleAddBalanceSheet} onToggleBalanceSheet={handleToggleBalanceSheet} balanceSheetExists={balanceSheetExists} balanceSheetVisible={showBalanceSheet} />
-      <div className="dashboard-main">
-        <Sidebar />
-        <main className="dashboard-content" style={{ backgroundColor: '#000000' }}>
-          <div className="dashboard-grid">
-            <div className="grid-left">
-              <IncomeSection />
-            </div>
-            <div className="grid-right">
-              <div className="grid-right-top">
-                <SummarySection />
-              </div>
-              <div className="grid-right-bottom">
-                <ExpensesSection />
-              </div>
-            </div>
-          </div>
-          {showBalanceSheet && (
-            <div className="balance-sheet-section">
-              <div className="balance-sheet-grid">
-                <AssetsSection />
-                <LiabilitiesSection />
-              </div>
-            </div>
-          )}
-        </main>
-      </div>
-    </div>
   );
 };
 
