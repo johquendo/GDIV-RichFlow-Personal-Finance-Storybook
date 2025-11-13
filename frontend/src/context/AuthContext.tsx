@@ -12,6 +12,9 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateUsername: (newName: string) => Promise<void>;
+  updateEmail: (newEmail: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -66,11 +69,51 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
   };
 
+  const updateUsername = async (newName: string) => {
+    try {
+      const data = await authAPI.updateUsername(newName);
+      // Expect backend to return `{ user: { id, email, name } }`
+      if (data?.user) {
+        setUser(data.user);
+      } else {
+        // Fallback to local update
+        setUser((prev) => (prev ? { ...prev, name: newName } : prev));
+      }
+    } catch (error: any) {
+      // Surface error to caller
+      throw error;
+    }
+  };
+
+  const updateEmail = async (newEmail: string) => {
+    try {
+      const data = await authAPI.updateEmail(newEmail);
+      if (data?.user) {
+        setUser(data.user);
+      } else {
+        setUser((prev) => (prev ? { ...prev, email: newEmail } : prev));
+      }
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    try {
+      await authAPI.updatePassword(currentPassword, newPassword);
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
   const value = {
     user,
     loading,
     login,
     logout,
+    updateUsername,
+    updateEmail,
+    changePassword,
     isAuthenticated: !!user,
   };
 

@@ -8,6 +8,9 @@ import Signup from './pages/Signup/Signup';
 import Login from './pages/Login/login';
 import Dashboard from './pages/Dashboard/Dashboard';
 import UserGuide from './pages/UserGuide/UserGuide';
+import ChangeUsername from './pages/ChangeUsername/ChangeUsername';
+import ChangeEmail from './pages/ChangeEmail/ChangeEmail';
+import ChangePassword from './pages/ChangePassword/ChangePassword';
 
 const container = document.getElementById('root');
 if (!container) {
@@ -31,6 +34,30 @@ root.render(
                 <UserGuide />
               </ProtectedRoute>
             } 
+          />
+          <Route
+            path="/change-username"
+            element={
+              <ProtectedRoute>
+                <ChangeUsername />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/change-email"
+            element={
+              <ProtectedRoute>
+                <ChangeEmail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/change-password"
+            element={
+              <ProtectedRoute>
+                <ChangePassword />
+              </ProtectedRoute>
+            }
           />
         </Routes>
       </AuthProvider>

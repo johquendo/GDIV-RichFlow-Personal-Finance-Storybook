@@ -222,6 +222,32 @@ export const authAPI = {
       broadcastAuthChanged();
     }
   },
+  
+  // Update username (persisted)
+  updateUsername: async (name: string) => {
+    return await apiRequest('/auth/username', {
+      method: 'PUT',
+      body: JSON.stringify({ name }),
+      requiresAuth: true,
+    });
+  },
+  // Update email (persisted)
+  updateEmail: async (email: string) => {
+    return await apiRequest('/auth/email', {
+      method: 'PUT',
+      body: JSON.stringify({ email }),
+      requiresAuth: true,
+    });
+  },
+
+  // Update password (persisted)
+  updatePassword: async (currentPassword: string, newPassword: string) => {
+    return await apiRequest('/auth/password', {
+      method: 'PUT',
+      body: JSON.stringify({ currentPassword, newPassword }),
+      requiresAuth: true,
+    });
+  },
 };
 
 // Income API calls

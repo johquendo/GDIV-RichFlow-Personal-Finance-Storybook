@@ -64,17 +64,17 @@ const Sidebar: React.FC<Props> = ({ onOpenAssistant }) => {
           <span className="sidebar-text"> Settings </span>
         </button>
 
-        <button className="selection large"> 
+        <button className="selection large" onClick={() => navigate('/change-username')}> 
           <div className="sidebar-button large"></div>
           <span className="sidebar-text"> Change Username </span>
         </button>
 
-        <button className="selection large"> 
+        <button className="selection large" onClick={() => navigate('/change-email')}> 
           <div className="sidebar-button large"></div>
           <span className="sidebar-text"> Change Email </span>
         </button>
 
-        <button className="selection large"> 
+        <button className="selection large" onClick={() => navigate('/change-password')}> 
           <div className="sidebar-button large"></div>
           <span className="sidebar-text"> Change Password </span>
         </button>
