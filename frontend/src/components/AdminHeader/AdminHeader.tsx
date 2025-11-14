@@ -11,7 +11,7 @@ const AdminHeader: React.FC = () => {
         </div>
       </div>
       <div className="header-center">
-        <h1 className="header-title">Administrator</h1>
+        <h1 className="header-title">Administrator Panel</h1>
       </div>
       <div className="header-right">
       </div>
