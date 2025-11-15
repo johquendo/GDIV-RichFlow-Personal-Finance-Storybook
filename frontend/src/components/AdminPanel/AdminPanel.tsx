@@ -118,11 +118,13 @@ const AdminPanel: React.FC = () => {
   // If a user is selected, show their financial data
   if (selectedUserId !== null) {
     return (
-      <AdminUserFinancialView
-        userId={selectedUserId}
-        userName={selectedUserName}
-        onBack={handleBackToUserList}
-      />
+      <section className="admin-section">
+        <AdminUserFinancialView
+          userId={selectedUserId}
+          userName={selectedUserName}
+          onBack={handleBackToUserList}
+        />
+      </section>
     );
   }
 

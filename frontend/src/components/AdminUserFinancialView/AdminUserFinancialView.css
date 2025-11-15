@@ -1,10 +1,11 @@
 .admin-financial-view {
   width: 100%;
-  padding: 24px;
-  background-color: #000000;
+  padding: 20px;
+  padding-bottom: 60px;
+  background-color: #1E1E1E;
   color: #ffffff;
-  min-height: 100vh;
   font-family: "Inter", sans-serif;
+  box-sizing: border-box;
 }
 
 /* Header Section */
