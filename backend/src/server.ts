@@ -8,6 +8,10 @@ import authRoutes from './routes/auth.routes';
 import cashSavingsRoutes from './routes/cashSavings.routes';
 import incomeRoutes from './routes/income.routes';
 import expenseRoutes from './routes/expense.routes';
+import aiRoutes from './routes/ai.routes';
+import balanceSheetRoutes from './routes/balanceSheet.routes';
+import adminRoutes from './routes/admin.routes';
+import currencyRoutes from './routes/currency.routes';
 import { errorHandler } from './middleware/errorHandler.middleware';
 
 // Load environment variables from .env file
@@ -48,6 +52,9 @@ app.use('/api', (req, res, next) => {
 // Mount auth routes
 app.use('/api/auth', authRoutes);
 
+// Mount admin routes
+app.use('/api/admin', adminRoutes);
+
 // Mount cash savings routes
 app.use('/api/cash-savings', cashSavingsRoutes);
 
@@ -57,8 +64,18 @@ app.use('/api/income', incomeRoutes);
 // Mount expense routes
 app.use('/api/expenses', expenseRoutes);
 
+// Mount currency routes (BEFORE /api to avoid auth middleware interference)
+app.use('/api/currency', currencyRoutes);
+
+// Mount AI routes
+app.use('/api/ai', aiRoutes);
+
+// Mount balance sheet routes
+app.use('/api', balanceSheetRoutes);
+
 // Mount other API routes
 app.use('/api', routes);
+
 
 // Handle 404s for API routes
 app.use('/api', (req, res) => {

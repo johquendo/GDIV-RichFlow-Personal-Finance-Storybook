@@ -12,6 +12,7 @@ interface UserResponse {
   id: number;
   name: string | null;
   email: string;
+  isAdmin: boolean;
   createdAt: Date;
   updatedAt: Date;
   lastLogin: Date | null;
@@ -65,6 +66,7 @@ export async function createUser(userData: CreateUserData): Promise<UserResponse
         id: true,
         name: true,
         email: true,
+        isAdmin: true,
         createdAt: true,
         updatedAt: true,
         lastLogin: true
@@ -100,7 +102,10 @@ export async function createUser(userData: CreateUserData): Promise<UserResponse
  */
 export async function loginUser(email: string, password: string) {
   const user = await prisma.user.findUnique({
-    where: { email }
+    where: { email },
+    include: {
+      PreferredCurrency: true
+    }
   });
 
   if (!user) {
@@ -121,7 +126,9 @@ export async function loginUser(email: string, password: string) {
   return {
     id: user.id,
     email: user.email,
-    name: user.name
+    name: user.name,
+    isAdmin: user.isAdmin,
+    PreferredCurrency: user.PreferredCurrency
   };
 }
 
@@ -165,7 +172,9 @@ export async function findValidSession(refreshToken: string) {
         select: {
           id: true,
           email: true,
-          name: true
+          name: true,
+          isAdmin: true,
+          PreferredCurrency: true
         }
       }
     }
@@ -208,4 +217,101 @@ export async function cleanupExpiredSessions() {
       }
     }
   });
+}
+
+/**
+ * Update a user's username
+ * @param userId - ID of the user to update
+ * @param newName - New username to set
+ * @returns Updated user or throws on conflict
+ */
+export async function updateUsername(userId: number, newName: string) {
+  // Check if another user already has the requested name
+  const existing = await prisma.user.findFirst({
+    where: {
+      name: newName,
+      id: { not: userId }
+    }
+  });
+
+  if (existing) {
+    const err: any = new Error('Username already taken');
+    err.code = 'USERNAME_TAKEN';
+    throw err;
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { name: newName, updatedAt: new Date() },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      isAdmin: true,
+      PreferredCurrency: true
+    }
+  });
+
+  return updated;
+}
+
+/**
+ * Update a user's email address
+ * @param userId - ID of the user to update
+ * @param newEmail - New email to set
+ * @returns Updated user or throws on conflict
+ */
+export async function updateEmail(userId: number, newEmail: string) {
+  // Check if email already used by another account
+  const existing = await prisma.user.findFirst({
+    where: {
+      email: newEmail,
+      id: { not: userId }
+    }
+  });
+
+  if (existing) {
+    const err: any = new Error('Email already in use');
+    err.code = 'EMAIL_TAKEN';
+    throw err;
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { email: newEmail, updatedAt: new Date() },
+    select: { id: true, email: true, name: true, isAdmin: true, PreferredCurrency: true }
+  });
+
+  return updated;
+}
+
+/**
+ * Update a user's password after verifying current password
+ * @param userId - ID of the user
+ * @param currentPassword - Current password to verify
+ * @param newPassword - New password to set (plain text)
+ */
+export async function updatePassword(userId: number, currentPassword: string, newPassword: string) {
+  // Fetch user's current password hash
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    const err: any = new Error('User not found');
+    err.code = 'USER_NOT_FOUND';
+    throw err;
+  }
+
+  const isValid = await comparePassword(currentPassword, user.password);
+  if (!isValid) {
+    const err: any = new Error('Current password is incorrect');
+    err.code = 'INVALID_CURRENT_PASSWORD';
+    throw err;
+  }
+
+  const hashed = await hashPassword(newPassword);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { password: hashed, updatedAt: new Date() }
+  });
+
+  return true;
 }

@@ -3,6 +3,9 @@ import { incomeAPI } from "../../utils/api";
 import "./IncomeSection.css";
 import { passiveIncomeStore } from "../../state/passiveIncomeStore";
 import { incomeTotalsStore } from "../../state/incomeTotalsStore";
+import { useFinancialData } from "../../context/FinancialDataContext";
+import { useAuth } from "../../context/AuthContext";
+import { formatCurrency } from "../../utils/currency.utils";
 
 interface IncomeItem {
   id: number;
@@ -12,6 +15,8 @@ interface IncomeItem {
 }
 
 const IncomeSection: React.FC = () => {
+  const { user } = useAuth();
+  const currency = user?.preferredCurrency;
   const [earnedIncome, setEarnedIncome] = useState<IncomeItem[]>([]);
   const [portfolioIncome, setPortfolioIncome] = useState<IncomeItem[]>([]);
   const [passiveIncome, setPassiveIncome] = useState<IncomeItem[]>([]);
@@ -19,6 +24,7 @@ const IncomeSection: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
+  const { triggerDataUpdate } = useFinancialData();
 
   // Fetch income data on component mount
   useEffect(() => {
@@ -125,6 +131,9 @@ const IncomeSection: React.FC = () => {
         passiveIncomeStore.set(passiveTotal);
         incomeTotalsStore.set({ passive: passiveTotal });
       }
+      
+      // Trigger financial data update for AI insights
+      triggerDataUpdate();
     } catch (err: any) {
       console.error('Error adding income:', err);
       setError('Failed to add income');
@@ -162,6 +171,9 @@ const IncomeSection: React.FC = () => {
         passiveIncomeStore.set(passiveTotal);
         incomeTotalsStore.set({ passive: passiveTotal });
       }
+      
+      // Trigger financial data update for AI insights
+      triggerDataUpdate();
     } catch (err: any) {
       console.error('Error deleting income:', err);
       setError('Failed to delete income');
@@ -194,7 +206,7 @@ const IncomeSection: React.FC = () => {
             {items.map((item) => (
               <div key={item.id} className="income-item">
                 <span>{item.name}</span>
-                <span>${typeof item.amount === 'number' ? item.amount.toFixed(2) : '0.00'}</span>
+                <span>{formatCurrency(typeof item.amount === 'number' ? item.amount : 0, currency)}</span>
                 <button
                   className="delete-btn"
                   onClick={() => handleDelete(section, item.id)}

@@ -7,7 +7,9 @@ import {
   findValidSession,
   invalidateSession,
   invalidateAllUserSessions
+  , updateUsername
 } from '../services/auth.service';
+import { updateEmail, updatePassword } from '../services/auth.service';
 import { generateAccessToken } from '../utils/jwt.utils';
 import prisma from '../config/database.config';
 
@@ -76,7 +78,8 @@ export async function login(req: Request, res: Response, next: NextFunction) {
     // Generate tokens
     const accessToken = generateAccessToken({
       userId: user.id,
-      email: user.email
+      email: user.email,
+      isAdmin: user.isAdmin
     });
 
     // Create session with refresh token
@@ -96,7 +99,9 @@ export async function login(req: Request, res: Response, next: NextFunction) {
       user: {
         id: user.id,
         email: user.email,
-        name: user.name
+        name: user.name,
+        isAdmin: user.isAdmin,
+        preferredCurrency: user.PreferredCurrency
       }
     });
 
@@ -127,7 +132,8 @@ export async function refreshToken(req: Request, res: Response, next: NextFuncti
     // Generate new access token
     const accessToken = generateAccessToken({
       userId: session.User.id,
-      email: session.User.email
+      email: session.User.email,
+      isAdmin: session.User.isAdmin
     });
 
     return res.status(200).json({
@@ -135,7 +141,9 @@ export async function refreshToken(req: Request, res: Response, next: NextFuncti
       user: {
         id: session.User.id,
         email: session.User.email,
-        name: session.User.name
+        name: session.User.name,
+        isAdmin: session.User.isAdmin,
+        preferredCurrency: session.User.PreferredCurrency
       }
     });
 
@@ -211,8 +219,10 @@ export async function getProfile(req: Request, res: Response, next: NextFunction
         id: true,
         email: true,
         name: true,
+        isAdmin: true,
         createdAt: true,
-        lastLogin: true
+        lastLogin: true,
+        PreferredCurrency: true
       }
     });
 
@@ -224,12 +234,110 @@ export async function getProfile(req: Request, res: Response, next: NextFunction
       user: {
         id: user.id.toString(),
         email: user.email,
-        name: user.name
+        name: user.name,
+        isAdmin: user.isAdmin,
+        preferredCurrency: user.PreferredCurrency
       }
     });
 
   } catch (error) {
     console.error('Get profile error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/**
+ * Update current user's username
+ * @route PUT /api/auth/username
+ */
+export async function updateUsernameHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    const { name } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'New username is required' });
+    }
+
+    try {
+      const updated = await updateUsername(userId, name.trim());
+      return res.status(200).json({ user: updated });
+    } catch (err: any) {
+      if (err?.code === 'USERNAME_TAKEN') {
+        return res.status(409).json({ error: 'Username already taken' });
+      }
+      throw err;
+    }
+  } catch (error) {
+    console.error('Update username error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/**
+ * Update current user's email
+ * @route PUT /api/auth/email
+ */
+export async function updateEmailHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    const { email } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    if (!email || typeof email !== 'string' || !email.trim()) {
+      return res.status(400).json({ error: 'New email is required' });
+    }
+
+    try {
+      const updated = await updateEmail(userId, email.trim());
+      return res.status(200).json({ user: updated });
+    } catch (err: any) {
+      if (err?.code === 'EMAIL_TAKEN') {
+        return res.status(409).json({ error: 'Email already in use' });
+      }
+      throw err;
+    }
+  } catch (error) {
+    console.error('Update email error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/**
+ * Update current user's password
+ * @route PUT /api/auth/password
+ */
+export async function updatePasswordHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current and new passwords are required' });
+    }
+
+    try {
+      await updatePassword(userId, currentPassword, newPassword);
+      return res.status(200).json({ message: 'Password updated successfully' });
+    } catch (err: any) {
+      if (err?.code === 'INVALID_CURRENT_PASSWORD') {
+        return res.status(401).json({ error: 'Current password is incorrect' });
+      }
+      throw err;
+    }
+  } catch (error) {
+    console.error('Update password error:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
