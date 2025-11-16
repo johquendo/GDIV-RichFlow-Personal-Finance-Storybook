@@ -6,10 +6,41 @@
   background-color: #1E1E1E;
   border-bottom: 2px solid #2a2a2a;
   height: 80px;
+  position: relative;
+  z-index: 999;
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 0.75rem 1rem 0.75rem 5rem;
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 0.5rem 0.75rem 0.5rem 4.5rem;
+  }
 }
 
 .header-left {
   flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .header-left {
+    flex: 0 1 auto;
+    max-width: 50%;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-left {
+    max-width: 60%;
+  }
 }
 
 .logo {
@@ -35,10 +66,37 @@
 }
 
 .logo-text {
-  font-size: 1.8rem;
+  font-size: clamp(1rem, 3vw + 0.5rem, 1.8rem);
   font-weight: bold;
   color: #EDCA69;
   letter-spacing: 0.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .logo-circle {
+    height: 36px;
+    width: 36px;
+  }
+
+  .logo-icon {
+    max-height: 36px;
+    max-width: 36px;
+  }
+}
+
+@media (max-width: 480px) {
+  .logo-circle {
+    height: 32px;
+    width: 32px;
+  }
+
+  .logo-icon {
+    max-height: 32px;
+    max-width: 32px;
+  }
 }
 
 .header-center {
@@ -48,10 +106,22 @@
 }
 
 .header-title {
-  font-size: 2rem;
+  font-size: clamp(1.25rem, 3vw + 0.5rem, 2rem);
   font-weight: bold;
   color: #EDCA69;
   margin: 0;
+}
+
+@media (max-width: 768px) {
+  .header-center {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-title {
+    font-size: 1.25rem;
+  }
 }
 
 .header-right {

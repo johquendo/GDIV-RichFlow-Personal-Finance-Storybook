@@ -11,11 +11,24 @@
   background: linear-gradient(135deg, #7345AF 0%, #9d6dd4 100%);
   padding: 0.75rem 1.5rem;
   border-radius: 12px;
-  font-size: 1.5rem;
+  font-size: clamp(1.125rem, 2.5vw + 0.5rem, 1.5rem);
   font-weight: 700;
   text-align: center;
   margin-bottom: 1.5rem;
   box-shadow: 0 4px 12px rgba(115, 69, 175, 0.3);
+}
+
+@media (max-width: 768px) {
+  .expense-header {
+    padding: 0.5rem 1rem;
+    margin-bottom: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .expense-header {
+    padding: 0.5rem 0.75rem;
+  }
 }
 
 .expense-card {
@@ -43,8 +56,20 @@
   font-weight: 700;
   text-align: center;
   margin-bottom: 1rem;
-  font-size: 1.1rem;
+  font-size: clamp(1rem, 2vw + 0.5rem, 1.1rem);
   box-shadow: 0 2px 8px rgba(157, 109, 212, 0.3);
+}
+
+@media (max-width: 768px) {
+  .expense-card {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .expense-card {
+    padding: 0.75rem;
+  }
 }
 
 .expense-empty {
@@ -103,6 +128,21 @@
   font-size: 0.95rem;
   outline: none;
   transition: border-color 0.2s;
+  min-height: 44px;
+}
+
+@media (max-width: 768px) {
+  .expense-inputs {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .expense-inputs input {
+    padding: 0.75rem;
+    font-size: 1rem;
+  }
 }
 
 .expense-inputs input:focus {
@@ -125,6 +165,14 @@
   color: white;
   transition: transform 0.2s, box-shadow 0.2s;
   font-size: 0.95rem;
+  min-height: 44px;
+}
+
+@media (max-width: 480px) {
+  .add-expense-btn {
+    padding: 0.875rem;
+    font-size: 1rem;
+  }
 }
 
 .add-expense-btn:hover {

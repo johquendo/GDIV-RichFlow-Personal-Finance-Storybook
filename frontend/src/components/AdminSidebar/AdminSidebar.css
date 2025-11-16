@@ -6,12 +6,36 @@
   padding: 1.5rem 0;
   gap: 0.5rem;
   border-right: 2px solid #2a2a2a;
-  transition: width 0.3s ease;
+  transition: width 0.3s ease, transform 0.3s ease;
   overflow: hidden;
+  position: relative;
+  z-index: 1000;
 }
 
 .admin-sidebar.expanded {
   width: 250px;
+}
+
+/* Mobile Styles */
+@media (max-width: 768px) {
+  .admin-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 280px;
+    transform: translateX(-100%);
+    z-index: 1100;
+    padding: 1rem 0;
+  }
+
+  .admin-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .admin-sidebar.expanded {
+    width: 280px;
+  }
 }
 
 .admin-sidebar-section {
@@ -72,4 +96,83 @@
 
 .admin-sidebar.expanded .admin-sidebar-text {
   opacity: 1;
+}
+
+/* Hamburger Menu Button */
+.admin-sidebar-hamburger {
+  display: none;
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 1050;
+  background-color: #1E1E1E;
+  border: 2px solid #EDCA69;
+  border-radius: 8px;
+  width: 48px;
+  height: 48px;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.admin-sidebar-hamburger:hover {
+  background-color: #2a2a2a;
+  box-shadow: 0 0 15px rgba(237, 202, 105, 0.3);
+}
+
+.admin-sidebar-hamburger-line {
+  width: 24px;
+  height: 3px;
+  background-color: #EDCA69;
+  border-radius: 2px;
+  transition: all 0.3s ease;
+}
+
+.admin-sidebar-hamburger.open .admin-sidebar-hamburger-line:nth-child(1) {
+  transform: rotate(45deg) translateY(8px);
+}
+
+.admin-sidebar-hamburger.open .admin-sidebar-hamburger-line:nth-child(2) {
+  opacity: 0;
+}
+
+.admin-sidebar-hamburger.open .admin-sidebar-hamburger-line:nth-child(3) {
+  transform: rotate(-45deg) translateY(-8px);
+}
+
+@media (max-width: 768px) {
+  .admin-sidebar-hamburger {
+    display: flex;
+  }
+}
+
+/* Mobile Overlay */
+.admin-sidebar-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1050;
+  animation: fadeInOverlay 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  .admin-sidebar-overlay.active {
+    display: block;
+  }
+}
+
+@keyframes fadeInOverlay {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }

@@ -6,28 +6,62 @@ import { useAuth } from '../../context/AuthContext';
 const Landing: React.FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  
   return (
     <div className="text-white" style={{ background: 'linear-gradient(to bottom right, #7345AF, #7345AF, #1E1E1E, #000000)', minHeight: '100vh' }}>
       {/* Header */}
-      <header className="bg-dark px-8 py-6">
+      <header className="landing-header bg-dark px-8 py-6">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-dark rounded-full flex items-center justify-center">
-              <img src="/assets/richflow.png" alt="RichFlow Logo" />
+            <div className="landing-logo-circle w-12 h-12 bg-dark rounded-full flex items-center justify-center">
+              <img src="/assets/richflow.png" alt="RichFlow Logo" className="landing-logo-img" />
             </div>
-            <span className="text-5xl font-bold text-gold">RichFlow</span>
+            <span className="landing-logo-text text-5xl font-bold text-gold">RichFlow</span>
           </div>
           
-          {/* Navigation */}
-          <nav className="flex gap-4">
-            <button onClick={() => navigate('/login')} className="bg-purple text-gold px-8 py-3 rounded-2xl font-bold text-xl hover:bg-opacity-90 transition btn-hover-effect">
+          {/* Desktop Navigation */}
+          <nav className="landing-nav-desktop flex gap-4">
+            <button onClick={() => navigate('/login')} className="bg-purple text-gold px-8 py-3 rounded-2xl font-bold text-xl hover:bg-opacity-90 transition btn-hover-effect landing-nav-btn">
               { isAuthenticated ? 'Dashboard' : 'Log in'}
             </button>
-            <button onClick={() => navigate('/signup')} className="bg-purple text-gold px-8 py-3 rounded-2xl font-bold text-xl hover:bg-opacity-90 transition btn-hover-effect">
+            <button onClick={() => navigate('/signup')} className="bg-purple text-gold px-8 py-3 rounded-2xl font-bold text-xl hover:bg-opacity-90 transition btn-hover-effect landing-nav-btn">
               Sign up
             </button>
           </nav>
+
+          {/* Mobile Hamburger Menu */}
+          <button 
+            className="landing-hamburger"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Toggle menu"
+          >
+            <span className={`landing-hamburger-line ${mobileMenuOpen ? 'open' : ''}`}></span>
+            <span className={`landing-hamburger-line ${mobileMenuOpen ? 'open' : ''}`}></span>
+            <span className={`landing-hamburger-line ${mobileMenuOpen ? 'open' : ''}`}></span>
+          </button>
         </div>
+
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <>
+            <div className="landing-mobile-overlay" onClick={() => setMobileMenuOpen(false)}></div>
+            <nav className="landing-nav-mobile">
+              <button 
+                onClick={() => { navigate('/login'); setMobileMenuOpen(false); }} 
+                className="bg-purple text-gold px-6 py-3 rounded-xl font-bold text-lg hover:bg-opacity-90 transition btn-hover-effect w-full"
+              >
+                { isAuthenticated ? 'Dashboard' : 'Log in'}
+              </button>
+              <button 
+                onClick={() => { navigate('/signup'); setMobileMenuOpen(false); }} 
+                className="bg-purple text-gold px-6 py-3 rounded-xl font-bold text-lg hover:bg-opacity-90 transition btn-hover-effect w-full"
+              >
+                Sign up
+              </button>
+            </nav>
+          </>
+        )}
       </header>
 
       {/* Hero Section */}

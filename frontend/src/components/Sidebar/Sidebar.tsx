@@ -10,6 +10,7 @@ type Props = {
 
 const Sidebar: React.FC<Props> = ({ onOpenAssistant }) => {
   const [expanded, setExpanded] = React.useState(false);
+  const [mobileOpen, setMobileOpen] = React.useState(false);
   const [showCurrencyModal, setShowCurrencyModal] = React.useState(false);
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -26,11 +27,33 @@ const Sidebar: React.FC<Props> = ({ onOpenAssistant }) => {
   };
 
   return (
-    <aside className={`sidebar ${ expanded ? 'expanded' : ''}` } onMouseEnter={() => setExpanded(true)} onMouseLeave={() => setExpanded(false)}>
+    <>
+      {/* Hamburger Menu Button - Mobile Only */}
+      <button 
+        className={`sidebar-hamburger ${mobileOpen ? 'open' : ''}`}
+        onClick={() => setMobileOpen(!mobileOpen)}
+        aria-label="Toggle menu"
+      >
+        <span className="sidebar-hamburger-line"></span>
+        <span className="sidebar-hamburger-line"></span>
+        <span className="sidebar-hamburger-line"></span>
+      </button>
+
+      {/* Mobile Overlay */}
+      <div 
+        className={`sidebar-overlay ${mobileOpen ? 'active' : ''}`}
+        onClick={() => setMobileOpen(false)}
+      ></div>
+
+      <aside 
+        className={`sidebar ${expanded ? 'expanded' : ''} ${mobileOpen ? 'mobile-open' : ''}`} 
+        onMouseEnter={() => setExpanded(true)} 
+        onMouseLeave={() => setExpanded(false)}
+      >
       
       {/* Home Button */}
       <div className="sidebar-section">
-        <button className="selection large" onClick={() => navigate("/")}> 
+        <button className="selection large" onClick={() => { navigate("/"); setMobileOpen(false); }}> 
           <div className="sidebar-button large"></div>
           <span className="sidebar-text home"> Home </span>
         </button>
@@ -43,7 +66,7 @@ const Sidebar: React.FC<Props> = ({ onOpenAssistant }) => {
           <span className="sidebar-text"> General </span>
         </button>
 
-        <button className="selection large" onClick={() => navigate("/user-guide")}> 
+        <button className="selection large" onClick={() => { navigate("/user-guide"); setMobileOpen(false); }}> 
           <div className="sidebar-button large"></div>
           <span className="sidebar-text"> User Guide </span>
         </button>
@@ -66,22 +89,22 @@ const Sidebar: React.FC<Props> = ({ onOpenAssistant }) => {
           <span className="sidebar-text"> Settings </span>
         </button>
 
-        <button className="selection large" onClick={() => navigate('/change-username')}> 
+        <button className="selection large" onClick={() => { navigate('/change-username'); setMobileOpen(false); }}> 
           <div className="sidebar-button large"></div>
           <span className="sidebar-text"> Change Username </span>
         </button>
 
-        <button className="selection large" onClick={() => navigate('/change-email')}> 
+        <button className="selection large" onClick={() => { navigate('/change-email'); setMobileOpen(false); }}> 
           <div className="sidebar-button large"></div>
           <span className="sidebar-text"> Change Email </span>
         </button>
 
-        <button className="selection large" onClick={() => navigate('/change-password')}> 
+        <button className="selection large" onClick={() => { navigate('/change-password'); setMobileOpen(false); }}> 
           <div className="sidebar-button large"></div>
           <span className="sidebar-text"> Change Password </span>
         </button>
 
-        <button className="selection large" onClick={handleLogout}> 
+        <button className="selection large" onClick={() => { handleLogout(); setMobileOpen(false); }}> 
           <div className="sidebar-button large"></div>
           <span className="sidebar-text"> Log Out </span>
         </button>
@@ -102,7 +125,8 @@ const Sidebar: React.FC<Props> = ({ onOpenAssistant }) => {
         </div>
       )}
 
-    </aside>
+      </aside>
+    </>
   );
 };
 
