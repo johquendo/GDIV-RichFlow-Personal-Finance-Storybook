@@ -1,16 +1,22 @@
 import React from 'react';
 import './Analysis.css';
 import Sidebar from '../../components/Sidebar/Sidebar';
+import '../../components/Header/Header.css';
+import { useAuth } from '../../context/AuthContext';
 
 type SnapshotItem = { label: string; value: string };
 
 const Analysis: React.FC = () => {
+  const { user } = useAuth();
   const [loading, setLoading] = React.useState(true);
-  const [rangeValue, setRangeValue] = React.useState<number>(100);
-  const [showEvents, setShowEvents] = React.useState(false);
+  const [timelineOpen, setTimelineOpen] = React.useState(false);
+  const [selectedDate, setSelectedDate] = React.useState('');
   const [comparisonEnabled, setComparisonEnabled] = React.useState(false);
   const [comparisonDate, setComparisonDate] = React.useState('');
   const [snapshotItems, setSnapshotItems] = React.useState<SnapshotItem[]>([]);
+  const [savedSnapshots, setSavedSnapshots] = React.useState<Array<{ id: string; date: string; items: SnapshotItem[] }>>([]);
+  const [comparisonSnapshots, setComparisonSnapshots] = React.useState<Array<{ id: string; date: string; items: SnapshotItem[] }>>([]);
+  const [isDragOverComparison, setIsDragOverComparison] = React.useState(false);
 
   // Simulate initial data fetch
   React.useEffect(() => {
@@ -29,14 +35,43 @@ const Analysis: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
+  const handleSaveSnapshot = () => {
+    const id = `${Date.now()}`;
+    // Use selectedDate if set, otherwise current snapshot date
+    const date = selectedDate || snapshotItems.find(s => s.label === 'Date')?.value || '';
+    const cloned = snapshotItems.map(s => ({ ...s }));
+    if (date) {
+      const idx = cloned.findIndex(s => s.label === 'Date');
+      if (idx >= 0) cloned[idx] = { label: 'Date', value: date };
+    }
+    setSavedSnapshots(prev => [{ id, date: date || 'Unknown', items: cloned }, ...prev]);
+  };
+
+  const handleRemoveSnapshot = (id: string) => {
+    setSavedSnapshots(prev => prev.filter(s => s.id !== id));
+  };
+
   return (
     <div className="analysis-layout">
       <Sidebar />
       <main className="analysis-main" aria-labelledby="analysis-title">
-        <header className="analysis-header">
-          <h1 id="analysis-title" className="analysis-title">Financial Analysis</h1>
-          <p className="analysis-subtitle">Explore historical snapshots, compare points in time, and review significant events.</p>
+        {/* Top header styled like Dashboard */}
+        <header className="header">
+          <div className="header-left">
+            <div className="logo">
+              <div className="logo-circle"><img src="../../../assets/richflow.png" alt="RichFlow Logo" className="logo-icon" /></div>
+              <div className="flex flex-col">
+                <span className="logo-text">{user?.name}</span>
+                {user?.email && <span className="text-white text-sm opacity-80">{user.email}</span>}
+              </div>
+            </div>
+          </div>
+          <div className="header-center">
+            <h1 id="analysis-title" className="header-title">Analysis</h1>
+          </div>
+          <div className="header-right" />
         </header>
+        <div className="analysis-spacer" />
 
         {loading && (
           <div className="analysis-loading" role="status" aria-live="polite">
@@ -47,46 +82,27 @@ const Analysis: React.FC = () => {
 
         {!loading && (
           <div className="analysis-grid">
-            {/* Timeline */}
-            <section className="analysis-section timeline" aria-label="Timeline slider for historical position">
-              <div className="section-header">
-                <h2 className="section-heading">Timeline</h2>
-                <span className="section-note">Adjust to browse historical state (placeholder)</span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={rangeValue}
-                onChange={(e) => setRangeValue(Number(e.target.value))}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={rangeValue}
-              />
-              <div className="range-label">Position: {rangeValue}%</div>
-            </section>
-
-            {/* Snapshot */}
-            <section className="analysis-section snapshot" aria-label="Financial snapshot for selected date">
-              <div className="section-header">
-                <h2 className="section-heading">Snapshot</h2>
-                <span className="section-note">Values represent state at selected point</span>
-              </div>
-              <div className="snapshot-grid">
-                {snapshotItems.map(item => (
-                  <div key={item.label} className="snapshot-card">
-                    <div className="snapshot-label">{item.label}</div>
-                    <div className="snapshot-value">{item.value}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Comparison Tool */}
-            <section className="analysis-section comparison" aria-label="Compare snapshots between dates">
+            {/* Comparison (left) */}
+            <section
+              className={`analysis-section comparison ${isDragOverComparison ? 'drag-over' : ''}`}
+              aria-label="Compare snapshots between dates"
+              onDragOver={(e) => { e.preventDefault(); setIsDragOverComparison(true); }}
+              onDragLeave={() => setIsDragOverComparison(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragOverComparison(false);
+                const id = e.dataTransfer.getData('text/snapshot-id');
+                if (!id) return;
+                setComparisonSnapshots(prev => {
+                  if (prev.some(s => s.id === id)) return prev; // avoid duplicates
+                  const snap = savedSnapshots.find(s => s.id === id);
+                  return snap ? [...prev, snap] : prev;
+                });
+              }}
+            >
               <div className="section-header">
                 <h2 className="section-heading">Comparison</h2>
-                <span className="section-note">Select a second date to compare</span>
+                <span className="section-note">Drag a snapshot note here</span>
               </div>
               <label className="compare-toggle">
                 <input
@@ -106,25 +122,95 @@ const Analysis: React.FC = () => {
                   <button className="btn-primary" disabled={!comparisonDate}>Compare</button>
                 </div>
               )}
-              <div className="comparison-result">No comparison performed.</div>
+              <div className="comparison-result">
+                {comparisonSnapshots.length === 0 && 'No comparison snapshots.'}
+                {comparisonSnapshots.length > 0 && (
+                  <div className="comparison-snapshots">
+                    {comparisonSnapshots.map(cs => (
+                      <div key={cs.id} className="comparison-snapshot">
+                        <button
+                          className="comparison-remove"
+                          aria-label="Remove comparison snapshot"
+                          onClick={() => setComparisonSnapshots(prev => prev.filter(p => p.id !== cs.id))}
+                        >×</button>
+                        <div className="comparison-date">{cs.date}</div>
+                        <ul className="comparison-list">
+                          {cs.items.map(i => (
+                            <li key={i.label}><span>{i.label}:</span> {i.value}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </section>
 
-            {/* Event Log */}
-            <section className="analysis-section events" aria-label="Historical financial events">
+            {/* Snapshot (right) with embedded timeline */}
+            <section className="analysis-section snapshot" aria-label="Financial snapshot for selected date">
               <div className="section-header">
-                <h2 className="section-heading">Event Log</h2>
-                <span className="section-note">Recorded actions & changes (future)</span>
+                <h2 className="section-heading">Snapshot</h2>
+                <span className="section-note">Choose date & save sticky notes</span>
               </div>
-              <button className="btn-primary" onClick={() => setShowEvents(true)}>Open Event Log</button>
-              {showEvents && (
-                <div className="events-modal" role="dialog" aria-modal="true" aria-label="Historical Events" onClick={() => setShowEvents(false)}>
-                  <div className="events-modal-content" onClick={(e) => e.stopPropagation()}>
-                    <h3 className="events-title">Historical Events</h3>
-                    <ul className="events-list">
-                      <li>No events recorded yet.</li>
-                    </ul>
-                    <button className="btn-secondary" onClick={() => setShowEvents(false)}>Close</button>
+              <div className="snapshot-timeline-controls">
+                <button
+                  className="chip"
+                  onClick={() => setTimelineOpen(v => !v)}
+                  aria-expanded={timelineOpen}
+                >
+                  <span className="calendar-icon" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M7 2a1 1 0 0 0-1 1v1H5a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3h-1V3a1 1 0 1 0-2 0v1H9V3a1 1 0 0 0-1-1ZM5 8h14v11a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V8Zm2 3a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm4-2a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm3 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z" />
+                    </svg>
+                  </span>
+                  {timelineOpen ? 'Hide Calendar' : 'Timeline'}
+                </button>
+                {timelineOpen && (
+                  <div className="timeline-picker">
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => {
+                        const newDate = e.target.value;
+                        setSelectedDate(newDate);
+                        // Update date in current snapshotItems
+                        setSnapshotItems(prev => prev.map(item => item.label === 'Date' ? { ...item, value: newDate } : item));
+                      }}
+                    />
                   </div>
+                )}
+              </div>
+              <div className="snapshot-grid">
+                {snapshotItems.map(item => (
+                  <div key={item.label} className="snapshot-card">
+                    <div className="snapshot-label">{item.label}</div>
+                    <div className="snapshot-value">{item.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="snapshot-actions">
+                <button className="btn-primary" onClick={handleSaveSnapshot}>Save Snapshot</button>
+              </div>
+              {savedSnapshots.length > 0 && (
+                <div className="sticky-notes">
+                  {savedSnapshots.map(note => (
+                    <div
+                      key={note.id}
+                      className="sticky-note"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/snapshot-id', note.id);
+                      }}
+                    >
+                      <button className="note-close" onClick={() => handleRemoveSnapshot(note.id)} aria-label="Remove snapshot">×</button>
+                      <div className="note-date">{note.date}</div>
+                      <ul className="note-list">
+                        {note.items.map(i => (
+                          <li key={i.label}><span>{i.label}:</span> {i.value}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
                 </div>
               )}
             </section>
