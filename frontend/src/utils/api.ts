@@ -449,6 +449,17 @@ export const aiAPI = {
   }
 }
 
+// Analysis API calls
+export const analysisAPI = {
+  getFinancialSnapshot: async (date?: string) => {
+    const url = date ? `/analysis/snapshot?date=${date}` : '/analysis/snapshot';
+    return await apiRequest(url, {
+      method: 'GET',
+      requiresAuth: true,
+    });
+  },
+};
+
 // Admin API calls
 export const adminAPI = {
   // Get all users
