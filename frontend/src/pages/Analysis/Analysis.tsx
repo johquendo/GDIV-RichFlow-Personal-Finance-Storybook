@@ -4,8 +4,42 @@ import Sidebar from '../../components/Sidebar/Sidebar';
 import '../../components/Header/Header.css';
 import Header from '../../components/Header/Header';
 import { useAuth } from '../../context/AuthContext';
+import { analysisAPI } from '../../utils/api';
 
-type SnapshotItem = { label: string; value: string };
+type SnapshotData = {
+  date: string;
+  balanceSheet: {
+    totalCashBalance: number;
+    totalAssets: number;
+    totalLiabilities: number;
+    netWorth: number;
+  };
+  cashflow: {
+    earnedIncome: number;
+    passiveIncome: number;
+    portfolioIncome: number;
+    totalIncome: number;
+    totalExpenses: number;
+    netCashflow: number;
+    direction: string;
+  };
+  ratios: {
+    passiveCoverageRatio: string;
+    savingsRate: string;
+  };
+  incomeQuadrant: {
+    EMPLOYEE: number;
+    SELF_EMPLOYED: number;
+    BUSINESS_OWNER: number;
+    INVESTOR: number;
+  };
+};
+
+type SavedSnapshot = {
+  id: string;
+  date: string;
+  data: SnapshotData;
+};
 
 const Analysis: React.FC = () => {
   const { user } = useAuth();
@@ -14,42 +48,59 @@ const Analysis: React.FC = () => {
   const [selectedDate, setSelectedDate] = React.useState('');
   const [comparisonEnabled, setComparisonEnabled] = React.useState(false);
   const [comparisonDate, setComparisonDate] = React.useState('');
-  const [snapshotItems, setSnapshotItems] = React.useState<SnapshotItem[]>([]);
-  const [savedSnapshots, setSavedSnapshots] = React.useState<Array<{ id: string; date: string; items: SnapshotItem[] }>>([]);
-  const [comparisonSnapshots, setComparisonSnapshots] = React.useState<Array<{ id: string; date: string; items: SnapshotItem[] }>>([]);
+  const [snapshotData, setSnapshotData] = React.useState<SnapshotData | null>(null);
+  const [savedSnapshots, setSavedSnapshots] = React.useState<SavedSnapshot[]>([]);
+  const [comparisonSnapshots, setComparisonSnapshots] = React.useState<SavedSnapshot[]>([]);
   const [isDragOverComparison, setIsDragOverComparison] = React.useState(false);
 
-  // Simulate initial data fetch
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      const today = new Date().toISOString().substring(0, 10);
-      setSnapshotItems([
-        { label: 'Date', value: today },
-        { label: 'Cash Flow', value: '$0.00' },
-        { label: 'Total Income', value: '$0.00' },
-        { label: 'Total Expenses', value: '$0.00' },
-        { label: 'Assets', value: '$0.00' },
-        { label: 'Liabilities', value: '$0.00' }
-      ]);
+  // Fetch financial snapshot
+  const fetchSnapshot = async (date?: string) => {
+    try {
+      setLoading(true);
+      const data = await analysisAPI.getFinancialSnapshot(date);
+      setSnapshotData(data);
+    } catch (error) {
+      console.error('Failed to fetch snapshot:', error);
+    } finally {
       setLoading(false);
-    }, 600);
-    return () => clearTimeout(timer);
+    }
+  };
+
+  // Initial data fetch
+  React.useEffect(() => {
+    fetchSnapshot();
   }, []);
 
-  const handleSaveSnapshot = () => {
-    const id = `${Date.now()}`;
-    // Use selectedDate if set, otherwise current snapshot date
-    const date = selectedDate || snapshotItems.find(s => s.label === 'Date')?.value || '';
-    const cloned = snapshotItems.map(s => ({ ...s }));
-    if (date) {
-      const idx = cloned.findIndex(s => s.label === 'Date');
-      if (idx >= 0) cloned[idx] = { label: 'Date', value: date };
+  // Fetch when date changes
+  React.useEffect(() => {
+    if (selectedDate) {
+      fetchSnapshot(selectedDate);
     }
-    setSavedSnapshots(prev => [{ id, date: date || 'Unknown', items: cloned }, ...prev]);
+  }, [selectedDate]);
+
+  const handleSaveSnapshot = () => {
+    if (!snapshotData) return;
+    const id = `${Date.now()}`;
+    setSavedSnapshots(prev => [
+      { id, date: snapshotData.date, data: snapshotData },
+      ...prev
+    ]);
   };
 
   const handleRemoveSnapshot = (id: string) => {
     setSavedSnapshots(prev => prev.filter(s => s.id !== id));
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2
+    }).format(value);
+  };
+
+  const formatPercentage = (value: string) => {
+    return `${value}%`;
   };
 
   return (
@@ -107,7 +158,19 @@ const Analysis: React.FC = () => {
                     value={comparisonDate}
                     onChange={(e) => setComparisonDate(e.target.value)}
                   />
-                  <button className="btn-primary" disabled={!comparisonDate}>Compare</button>
+                  <button 
+                    className="btn-primary" 
+                    disabled={!comparisonDate}
+                    onClick={async () => {
+                      if (comparisonDate) {
+                        const data = await analysisAPI.getFinancialSnapshot(comparisonDate);
+                        const id = `${Date.now()}`;
+                        setComparisonSnapshots(prev => [...prev, { id, date: data.date, data }]);
+                      }
+                    }}
+                  >
+                    Compare
+                  </button>
                 </div>
               )}
               <div className="comparison-result">
@@ -122,11 +185,36 @@ const Analysis: React.FC = () => {
                           onClick={() => setComparisonSnapshots(prev => prev.filter(p => p.id !== cs.id))}
                         >×</button>
                         <div className="comparison-date">{cs.date}</div>
-                        <ul className="comparison-list">
-                          {cs.items.map(i => (
-                            <li key={i.label}><span>{i.label}:</span> {i.value}</li>
-                          ))}
-                        </ul>
+                        <div className="snapshot-metrics">
+                          <h4>Balance Sheet</h4>
+                          <ul>
+                            <li><span>Total Cash:</span> {formatCurrency(cs.data.balanceSheet.totalCashBalance)}</li>
+                            <li><span>Total Assets:</span> {formatCurrency(cs.data.balanceSheet.totalAssets)}</li>
+                            <li><span>Total Liabilities:</span> {formatCurrency(cs.data.balanceSheet.totalLiabilities)}</li>
+                            <li><span>Net Worth:</span> {formatCurrency(cs.data.balanceSheet.netWorth)}</li>
+                          </ul>
+                          <h4>Cashflow</h4>
+                          <ul>
+                            <li><span>Earned Income:</span> {formatCurrency(cs.data.cashflow.earnedIncome)}</li>
+                            <li><span>Passive Income:</span> {formatCurrency(cs.data.cashflow.passiveIncome)}</li>
+                            <li><span>Portfolio Income:</span> {formatCurrency(cs.data.cashflow.portfolioIncome)}</li>
+                            <li><span>Total Income:</span> {formatCurrency(cs.data.cashflow.totalIncome)}</li>
+                            <li><span>Total Expenses:</span> {formatCurrency(cs.data.cashflow.totalExpenses)}</li>
+                            <li><span>Net Cashflow:</span> {formatCurrency(cs.data.cashflow.netCashflow)}</li>
+                          </ul>
+                          <h4>Ratios</h4>
+                          <ul>
+                            <li><span>Passive Coverage:</span> {formatPercentage(cs.data.ratios.passiveCoverageRatio)}</li>
+                            <li><span>Savings Rate:</span> {formatPercentage(cs.data.ratios.savingsRate)}</li>
+                          </ul>
+                          <h4>Income Quadrant</h4>
+                          <ul>
+                            <li><span>Employee:</span> {formatCurrency(cs.data.incomeQuadrant.EMPLOYEE)}</li>
+                            <li><span>Self-Employed:</span> {formatCurrency(cs.data.incomeQuadrant.SELF_EMPLOYED)}</li>
+                            <li><span>Business Owner:</span> {formatCurrency(cs.data.incomeQuadrant.BUSINESS_OWNER)}</li>
+                            <li><span>Investor:</span> {formatCurrency(cs.data.incomeQuadrant.INVESTOR)}</li>
+                          </ul>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -158,27 +246,113 @@ const Analysis: React.FC = () => {
                     <input
                       type="date"
                       value={selectedDate}
-                      onChange={(e) => {
-                        const newDate = e.target.value;
-                        setSelectedDate(newDate);
-                        // Update date in current snapshotItems
-                        setSnapshotItems(prev => prev.map(item => item.label === 'Date' ? { ...item, value: newDate } : item));
-                      }}
+                      onChange={(e) => setSelectedDate(e.target.value)}
                     />
                   </div>
                 )}
               </div>
-              <div className="snapshot-grid">
-                {snapshotItems.map(item => (
-                  <div key={item.label} className="snapshot-card">
-                    <div className="snapshot-label">{item.label}</div>
-                    <div className="snapshot-value">{item.value}</div>
+
+              {/* Display current snapshot data */}
+              {snapshotData && (
+                <>
+                  <div className="snapshot-content">
+                    <div className="snapshot-section">
+                      <h3>Balance Sheet</h3>
+                      <div className="snapshot-grid">
+                        <div className="snapshot-card">
+                          <div className="snapshot-label">Total Cash Balance</div>
+                          <div className="snapshot-value">{formatCurrency(snapshotData.balanceSheet.totalCashBalance)}</div>
+                        </div>
+                        <div className="snapshot-card">
+                          <div className="snapshot-label">Total Assets</div>
+                          <div className="snapshot-value">{formatCurrency(snapshotData.balanceSheet.totalAssets)}</div>
+                        </div>
+                        <div className="snapshot-card">
+                          <div className="snapshot-label">Total Liabilities</div>
+                          <div className="snapshot-value">{formatCurrency(snapshotData.balanceSheet.totalLiabilities)}</div>
+                        </div>
+                        <div className="snapshot-card">
+                          <div className="snapshot-label">Net Worth</div>
+                          <div className="snapshot-value">{formatCurrency(snapshotData.balanceSheet.netWorth)}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="snapshot-section">
+                      <h3>Cashflow</h3>
+                      <div className="snapshot-grid">
+                        <div className="snapshot-card">
+                          <div className="snapshot-label">Earned Income</div>
+                          <div className="snapshot-value">{formatCurrency(snapshotData.cashflow.earnedIncome)}</div>
+                        </div>
+                        <div className="snapshot-card">
+                          <div className="snapshot-label">Passive Income</div>
+                          <div className="snapshot-value">{formatCurrency(snapshotData.cashflow.passiveIncome)}</div>
+                        </div>
+                        <div className="snapshot-card">
+                          <div className="snapshot-label">Portfolio Income</div>
+                          <div className="snapshot-value">{formatCurrency(snapshotData.cashflow.portfolioIncome)}</div>
+                        </div>
+                        <div className="snapshot-card">
+                          <div className="snapshot-label">Total Income</div>
+                          <div className="snapshot-value">{formatCurrency(snapshotData.cashflow.totalIncome)}</div>
+                        </div>
+                        <div className="snapshot-card">
+                          <div className="snapshot-label">Total Expenses</div>
+                          <div className="snapshot-value">{formatCurrency(snapshotData.cashflow.totalExpenses)}</div>
+                        </div>
+                        <div className="snapshot-card">
+                          <div className="snapshot-label">Net Cashflow</div>
+                          <div className={`snapshot-value ${snapshotData.cashflow.direction}`}>
+                            {formatCurrency(snapshotData.cashflow.netCashflow)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="snapshot-section">
+                      <h3>Financial Ratios</h3>
+                      <div className="snapshot-grid">
+                        <div className="snapshot-card">
+                          <div className="snapshot-label">Passive Coverage Ratio</div>
+                          <div className="snapshot-value">{formatPercentage(snapshotData.ratios.passiveCoverageRatio)}</div>
+                        </div>
+                        <div className="snapshot-card">
+                          <div className="snapshot-label">Savings Rate</div>
+                          <div className="snapshot-value">{formatPercentage(snapshotData.ratios.savingsRate)}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="snapshot-section">
+                      <h3>Income Quadrant Distribution</h3>
+                      <div className="snapshot-grid">
+                        <div className="snapshot-card">
+                          <div className="snapshot-label">Employee</div>
+                          <div className="snapshot-value">{formatCurrency(snapshotData.incomeQuadrant.EMPLOYEE)}</div>
+                        </div>
+                        <div className="snapshot-card">
+                          <div className="snapshot-label">Self-Employed</div>
+                          <div className="snapshot-value">{formatCurrency(snapshotData.incomeQuadrant.SELF_EMPLOYED)}</div>
+                        </div>
+                        <div className="snapshot-card">
+                          <div className="snapshot-label">Business Owner</div>
+                          <div className="snapshot-value">{formatCurrency(snapshotData.incomeQuadrant.BUSINESS_OWNER)}</div>
+                        </div>
+                        <div className="snapshot-card">
+                          <div className="snapshot-label">Investor</div>
+                          <div className="snapshot-value">{formatCurrency(snapshotData.incomeQuadrant.INVESTOR)}</div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                ))}
-              </div>
-              <div className="snapshot-actions">
-                <button className="btn-primary" onClick={handleSaveSnapshot}>Save Snapshot</button>
-              </div>
+
+                  <div className="snapshot-actions">
+                    <button className="btn-primary" onClick={handleSaveSnapshot}>Save Snapshot</button>
+                  </div>
+                </>
+              )}
+
               {savedSnapshots.length > 0 && (
                 <div className="sticky-notes">
                   {savedSnapshots.map(note => (
@@ -192,11 +366,10 @@ const Analysis: React.FC = () => {
                     >
                       <button className="note-close" onClick={() => handleRemoveSnapshot(note.id)} aria-label="Remove snapshot">×</button>
                       <div className="note-date">{note.date}</div>
-                      <ul className="note-list">
-                        {note.items.map(i => (
-                          <li key={i.label}><span>{i.label}:</span> {i.value}</li>
-                        ))}
-                      </ul>
+                      <div className="note-summary">
+                        <p>Net Worth: {formatCurrency(note.data.balanceSheet.netWorth)}</p>
+                        <p>Net Cashflow: {formatCurrency(note.data.cashflow.netCashflow)}</p>
+                      </div>
                     </div>
                   ))}
                 </div>

@@ -22,7 +22,6 @@ model User {
   Event               Event[]
   IncomeStatement     IncomeStatement?
   Session             Session[]
-  Event               Event[]
   PreferredCurrency   Currency         @relation(fields: [preferredCurrencyId], references: [id])
 }
 
@@ -98,7 +97,6 @@ model Currency {
   cur_name   String
   User       User[]
 }
-
 
 model Event {
   id             Int      @id @default(autoincrement())
