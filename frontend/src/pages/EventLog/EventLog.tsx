@@ -3,7 +3,7 @@ import { JSX, useEffect, useMemo, useState } from 'react';
 import './EventLog.css';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { eventsAPI } from '../../utils/api';
+import { incomeAPI, assetsAPI, liabilitiesAPI, expensesAPI, eventsAPI } from '../../utils/api';
 
 type EventType = 'INCOME' | 'EXPENSE' | 'ASSET' | 'LIABILITY' | 'CASH_SAVINGS';
 
@@ -25,6 +25,80 @@ interface FinancialEvent {
   type: EventType;
   description: string;
   valueChange: number;
+}
+
+// Helpers for snapshot + removed events persistence (per user)
+type Snapshot = {
+  incomes: Record<string, { subtype: 'Earned' | 'Portfolio' | 'Passive'; amount: number }>;
+  expenses: Record<string, { amount: number }>;
+  liabilities: Record<string, { value: number }>;
+};
+
+const parseNum = (v: any) => (typeof v === 'number' ? v : parseFloat(v));
+
+const usePerUserKeys = (user: any) => {
+  const uid = (user && (user.id || user.userId || user.uid)) || 'anon';
+  return {
+    removedKey: `eventlog:removed:user:${uid}`,
+    snapKey: `eventlog:snapshot:user:${uid}`,
+    deletedKey: `eventlog:deleted:user:${uid}`, // added
+  };
+};
+
+const loadRemovedEvents = (key: string): FinancialEvent[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(key);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveRemovedEvents = (key: string, events: FinancialEvent[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(key, JSON.stringify(events));
+  } catch {}
+};
+
+// Added deleted events helpers
+const loadDeletedIds = (key: string): Set<string> => {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(key);
+    const arr: string[] = raw ? JSON.parse(raw) : [];
+    return new Set(arr);
+  } catch {
+    return new Set();
+  }
+};
+
+const saveDeletedIds = (key: string, ids: Set<string>) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(key, JSON.stringify(Array.from(ids)));
+  } catch {}
+};
+
+const loadSnapshot = (key: string): Snapshot | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as Snapshot) : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveSnapshot = (key: string, snap: Snapshot) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(key, JSON.stringify(snap));
+  } catch {}
+};
+
   actionType: string;
 }
 
