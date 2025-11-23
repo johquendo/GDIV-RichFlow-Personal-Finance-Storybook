@@ -34,94 +34,13 @@ type SnapshotData = {
     BUSINESS_OWNER: number;
     INVESTOR: number;
   };
+  currency: { symbol: string; name: string };
 };
 
 type SavedSnapshot = {
   id: string;
   date: string;
   data: SnapshotData;
-  currency: { symbol: string; name: string }; // added to persist original currency
-};
-
-// --- Historical currency mapping helpers (localStorage) ---
-type CurrencyRecord = { date: string; symbol: string; name: string };
-const currencyHistoryKey = (userId: string | number | undefined) => `analysis:currencyHistory:user:${userId ?? 'anon'}`;
-
-/**
- * Load currency history (sorted ascending by date)
- */
-const loadCurrencyHistory = (userId: string | number | undefined): CurrencyRecord[] => {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(currencyHistoryKey(userId));
-    if (!raw) return [];
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return [];
-    return arr.filter(r => r?.date && r?.symbol && r?.name);
-  } catch {
-    return [];
-  }
-};
-
-/**
- * Save currency history
- */
-const saveCurrencyHistory = (userId: string | number | undefined, records: CurrencyRecord[]) => {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(currencyHistoryKey(userId), JSON.stringify(records));
-  } catch {}
-};
-
-/**
- * Ensure we record the current preferred currency if changed since last record.
- */
-const recordCurrentCurrencyIfNeeded = (userId: string | number | undefined, preferredCurrency: any) => {
-  if (!preferredCurrency) return;
-  const records = loadCurrencyHistory(userId);
-  const today = new Date().toISOString().substring(0, 10);
-  const last = records[records.length - 1];
-  if (!last || last.symbol !== preferredCurrency.cur_symbol) {
-    // Append new record (use today's date)
-    records.push({
-      date: today,
-      symbol: preferredCurrency.cur_symbol || '$',
-      name: preferredCurrency.cur_name || preferredCurrency.cur_symbol || '$'
-    });
-    saveCurrencyHistory(userId, records);
-  }
-};
-
-/**
- * Get currency for a snapshot date using latest record whose date <= snapshotDate.
- * Falls back to last record or provided current currency.
- */
-const resolveHistoricalCurrency = (
-  userId: string | number | undefined,
-  snapshotDate: string,
-  currentPreferred: any
-): { symbol: string; name: string } => {
-  const records = loadCurrencyHistory(userId);
-  if (records.length === 0) {
-    return {
-      symbol: currentPreferred?.cur_symbol || '$',
-      name: currentPreferred?.cur_name || currentPreferred?.cur_symbol || '$'
-    };
-  }
-  // Find latest record not after snapshotDate
-  const targetTs = new Date(snapshotDate).getTime();
-  let chosen: CurrencyRecord | null = null;
-  for (const r of records) {
-    const rTs = new Date(r.date).getTime();
-    if (rTs <= targetTs) {
-      if (!chosen || new Date(chosen.date).getTime() < rTs) {
-        chosen = r;
-      }
-    }
-  }
-  if (chosen) return { symbol: chosen.symbol, name: chosen.name };
-  // If all records are after snapshotDate, use earliest
-  return { symbol: records[0].symbol, name: records[0].name };
 };
 
 const Analysis: React.FC = () => {
@@ -136,29 +55,15 @@ const Analysis: React.FC = () => {
   const [comparisonSnapshots, setComparisonSnapshots] = React.useState<SavedSnapshot[]>([]);
   const [isDragOverComparison, setIsDragOverComparison] = React.useState(false);
 
-  const preferredCurrency = user?.preferredCurrency;
-
-  // Record current currency if changed (runs once when user loaded / currency changes)
-  React.useEffect(() => {
-    recordCurrentCurrencyIfNeeded(user?.id, preferredCurrency);
-  }, [user?.id, preferredCurrency]);
-
-  // Determine which currency to use for current displayed snapshot
-  const currentSnapshotCurrency = React.useMemo(() => {
-    const date = snapshotData?.date || new Date().toISOString().substring(0, 10);
-    return resolveHistoricalCurrency(user?.id, date, preferredCurrency);
-  }, [snapshotData?.date, preferredCurrency, user?.id]);
-
   // Historical currency formatter (per snapshot date)
   const formatHistorical = React.useCallback(
-    (value: number, date: string) => {
-      const histCurrency = resolveHistoricalCurrency(user?.id, date, preferredCurrency);
+    (value: number, currency: { symbol: string; name: string }) => {
       return formatCurrencyValue(value, {
-        cur_symbol: histCurrency.symbol,
-        cur_name: histCurrency.name
+        cur_symbol: currency.symbol,
+        cur_name: currency.name
       } as any);
     },
-    [user?.id, preferredCurrency]
+    []
   );
 
   // Fetch financial snapshot
@@ -193,10 +98,9 @@ const Analysis: React.FC = () => {
 
   const handleSaveSnapshot = () => {
     if (!snapshotData) return;
-    const histCurrency = resolveHistoricalCurrency(user?.id, snapshotData.date, preferredCurrency);
     const id = `${Date.now()}`;
     setSavedSnapshots(prev => [
-      { id, date: snapshotData.date, data: snapshotData, currency: histCurrency },
+      { id, date: snapshotData.date, data: snapshotData },
       ...prev
     ]);
   };
@@ -265,13 +169,11 @@ const Analysis: React.FC = () => {
                       onClick={async () => {
                         if (comparisonDate) {
                           const data = await analysisAPI.getFinancialSnapshot(comparisonDate);
-                          const histCurrency = resolveHistoricalCurrency(user?.id, data.date, preferredCurrency);
                           const id = `${Date.now()}`;
                           setComparisonSnapshots(prev => [...prev, {
                             id,
                             date: data.date,
-                            data,
-                            currency: histCurrency
+                            data
                           }]);
                         }
                       }}
@@ -295,19 +197,19 @@ const Analysis: React.FC = () => {
                           <div className="snapshot-metrics">
                             <h4>Balance Sheet</h4>
                             <ul>
-                              <li><span>Total Cash:</span> {formatCurrencyValue(cs.data.balanceSheet.totalCashBalance, { cur_symbol: cs.currency.symbol, cur_name: cs.currency.name } as any)}</li>
-                              <li><span>Total Assets:</span> {formatCurrencyValue(cs.data.balanceSheet.totalAssets, { cur_symbol: cs.currency.symbol, cur_name: cs.currency.name } as any)}</li>
-                              <li><span>Total Liabilities:</span> {formatCurrencyValue(cs.data.balanceSheet.totalLiabilities, { cur_symbol: cs.currency.symbol, cur_name: cs.currency.name } as any)}</li>
-                              <li><span>Net Worth:</span> {formatCurrencyValue(cs.data.balanceSheet.netWorth, { cur_symbol: cs.currency.symbol, cur_name: cs.currency.name } as any)}</li>
+                              <li><span>Total Cash:</span> {formatCurrencyValue(cs.data.balanceSheet.totalCashBalance, { cur_symbol: cs.data.currency.symbol, cur_name: cs.data.currency.name } as any)}</li>
+                              <li><span>Total Assets:</span> {formatCurrencyValue(cs.data.balanceSheet.totalAssets, { cur_symbol: cs.data.currency.symbol, cur_name: cs.data.currency.name } as any)}</li>
+                              <li><span>Total Liabilities:</span> {formatCurrencyValue(cs.data.balanceSheet.totalLiabilities, { cur_symbol: cs.data.currency.symbol, cur_name: cs.data.currency.name } as any)}</li>
+                              <li><span>Net Worth:</span> {formatCurrencyValue(cs.data.balanceSheet.netWorth, { cur_symbol: cs.data.currency.symbol, cur_name: cs.data.currency.name } as any)}</li>
                             </ul>
                             <h4>Cashflow</h4>
                             <ul>
-                              <li><span>Earned Income:</span> {formatCurrencyValue(cs.data.cashflow.earnedIncome, { cur_symbol: cs.currency.symbol, cur_name: cs.currency.name } as any)}</li>
-                              <li><span>Passive Income:</span> {formatCurrencyValue(cs.data.cashflow.passiveIncome, { cur_symbol: cs.currency.symbol, cur_name: cs.currency.name } as any)}</li>
-                              <li><span>Portfolio Income:</span> {formatCurrencyValue(cs.data.cashflow.portfolioIncome, { cur_symbol: cs.currency.symbol, cur_name: cs.currency.name } as any)}</li>
-                              <li><span>Total Income:</span> {formatCurrencyValue(cs.data.cashflow.totalIncome, { cur_symbol: cs.currency.symbol, cur_name: cs.currency.name } as any)}</li>
-                              <li><span>Total Expenses:</span> {formatCurrencyValue(cs.data.cashflow.totalExpenses, { cur_symbol: cs.currency.symbol, cur_name: cs.currency.name } as any)}</li>
-                              <li><span>Net Cashflow:</span> {formatCurrencyValue(cs.data.cashflow.netCashflow, { cur_symbol: cs.currency.symbol, cur_name: cs.currency.name } as any)}</li>
+                              <li><span>Earned Income:</span> {formatCurrencyValue(cs.data.cashflow.earnedIncome, { cur_symbol: cs.data.currency.symbol, cur_name: cs.data.currency.name } as any)}</li>
+                              <li><span>Passive Income:</span> {formatCurrencyValue(cs.data.cashflow.passiveIncome, { cur_symbol: cs.data.currency.symbol, cur_name: cs.data.currency.name } as any)}</li>
+                              <li><span>Portfolio Income:</span> {formatCurrencyValue(cs.data.cashflow.portfolioIncome, { cur_symbol: cs.data.currency.symbol, cur_name: cs.data.currency.name } as any)}</li>
+                              <li><span>Total Income:</span> {formatCurrencyValue(cs.data.cashflow.totalIncome, { cur_symbol: cs.data.currency.symbol, cur_name: cs.data.currency.name } as any)}</li>
+                              <li><span>Total Expenses:</span> {formatCurrencyValue(cs.data.cashflow.totalExpenses, { cur_symbol: cs.data.currency.symbol, cur_name: cs.data.currency.name } as any)}</li>
+                              <li><span>Net Cashflow:</span> {formatCurrencyValue(cs.data.cashflow.netCashflow, { cur_symbol: cs.data.currency.symbol, cur_name: cs.data.currency.name } as any)}</li>
                             </ul>
                             <h4>Ratios</h4>
                             <ul>
@@ -316,10 +218,10 @@ const Analysis: React.FC = () => {
                             </ul>
                             <h4>Income Quadrant</h4>
                             <ul>
-                              <li><span>Employee:</span> {formatCurrencyValue(cs.data.incomeQuadrant.EMPLOYEE, { cur_symbol: cs.currency.symbol, cur_name: cs.currency.name } as any)}</li>
-                              <li><span>Self-Employed:</span> {formatCurrencyValue(cs.data.incomeQuadrant.SELF_EMPLOYED, { cur_symbol: cs.currency.symbol, cur_name: cs.currency.name } as any)}</li>
-                              <li><span>Business Owner:</span> {formatCurrencyValue(cs.data.incomeQuadrant.BUSINESS_OWNER, { cur_symbol: cs.currency.symbol, cur_name: cs.currency.name } as any)}</li>
-                              <li><span>Investor:</span> {formatCurrencyValue(cs.data.incomeQuadrant.INVESTOR, { cur_symbol: cs.currency.symbol, cur_name: cs.currency.name } as any)}</li>
+                              <li><span>Employee:</span> {formatCurrencyValue(cs.data.incomeQuadrant.EMPLOYEE, { cur_symbol: cs.data.currency.symbol, cur_name: cs.data.currency.name } as any)}</li>
+                              <li><span>Self-Employed:</span> {formatCurrencyValue(cs.data.incomeQuadrant.SELF_EMPLOYED, { cur_symbol: cs.data.currency.symbol, cur_name: cs.data.currency.name } as any)}</li>
+                              <li><span>Business Owner:</span> {formatCurrencyValue(cs.data.incomeQuadrant.BUSINESS_OWNER, { cur_symbol: cs.data.currency.symbol, cur_name: cs.data.currency.name } as any)}</li>
+                              <li><span>Investor:</span> {formatCurrencyValue(cs.data.incomeQuadrant.INVESTOR, { cur_symbol: cs.data.currency.symbol, cur_name: cs.data.currency.name } as any)}</li>
                             </ul>
                           </div>
                         </div>
@@ -393,25 +295,25 @@ const Analysis: React.FC = () => {
                           <div className="snapshot-card">
                             <div className="snapshot-label">Total Cash Balance</div>
                             <div className="snapshot-value">
-                              {formatHistorical(snapshotData.balanceSheet.totalCashBalance, snapshotData.date)}
+                              {formatHistorical(snapshotData.balanceSheet.totalCashBalance, snapshotData.currency)}
                             </div>
                           </div>
                           <div className="snapshot-card">
                             <div className="snapshot-label">Total Assets</div>
                             <div className="snapshot-value">
-                              {formatHistorical(snapshotData.balanceSheet.totalAssets, snapshotData.date)}
+                              {formatHistorical(snapshotData.balanceSheet.totalAssets, snapshotData.currency)}
                             </div>
                           </div>
                           <div className="snapshot-card">
                             <div className="snapshot-label">Total Liabilities</div>
                             <div className="snapshot-value">
-                              {formatHistorical(snapshotData.balanceSheet.totalLiabilities, snapshotData.date)}
+                              {formatHistorical(snapshotData.balanceSheet.totalLiabilities, snapshotData.currency)}
                             </div>
                           </div>
                           <div className="snapshot-card">
                             <div className="snapshot-label">Net Worth</div>
                             <div className="snapshot-value">
-                              {formatHistorical(snapshotData.balanceSheet.netWorth, snapshotData.date)}
+                              {formatHistorical(snapshotData.balanceSheet.netWorth, snapshotData.currency)}
                             </div>
                           </div>
                         </div>
@@ -423,36 +325,36 @@ const Analysis: React.FC = () => {
                           <div className="snapshot-card">
                             <div className="snapshot-label">Earned Income</div>
                             <div className="snapshot-value">
-                              {formatHistorical(snapshotData.cashflow.earnedIncome, snapshotData.date)}
+                              {formatHistorical(snapshotData.cashflow.earnedIncome, snapshotData.currency)}
                             </div>
                           </div>
                           <div className="snapshot-card">
                             <div className="snapshot-label">Passive Income</div>
                             <div className="snapshot-value">
-                              {formatHistorical(snapshotData.cashflow.passiveIncome, snapshotData.date)}
+                              {formatHistorical(snapshotData.cashflow.passiveIncome, snapshotData.currency)}
                             </div>
                           </div>
                           <div className="snapshot-card">
                             <div className="snapshot-label">Portfolio Income</div>
                             <div className="snapshot-value">
-                              {formatHistorical(snapshotData.cashflow.portfolioIncome, snapshotData.date)}
+                              {formatHistorical(snapshotData.cashflow.portfolioIncome, snapshotData.currency)}
                             </div>
                           </div>
                           <div className="snapshot-card">
                             <div className="snapshot-label">Total Income</div>
                             <div className="snapshot-value">
-                              {formatHistorical(snapshotData.cashflow.totalIncome, snapshotData.date)}
+                              {formatHistorical(snapshotData.cashflow.totalIncome, snapshotData.currency)}
                             </div>
                           </div>
                           <div className="snapshot-card">
                             <div className="snapshot-label">Total Expenses</div>
                             <div className="snapshot-value">
-                              {formatHistorical(snapshotData.cashflow.totalExpenses, snapshotData.date)}
+                              {formatHistorical(snapshotData.cashflow.totalExpenses, snapshotData.currency)}
                             </div>
                           </div>
                           <div className="snapshot-card">
                             <div className={`snapshot-value ${snapshotData.cashflow.direction}`}>
-                              {formatHistorical(snapshotData.cashflow.netCashflow, snapshotData.date)}
+                              {formatHistorical(snapshotData.cashflow.netCashflow, snapshotData.currency)}
                             </div>
                           </div>
                         </div>
@@ -482,25 +384,25 @@ const Analysis: React.FC = () => {
                           <div className="snapshot-card">
                             <div className="snapshot-label">Employee</div>
                             <div className="snapshot-value">
-                              {formatHistorical(snapshotData.incomeQuadrant.EMPLOYEE, snapshotData.date)}
+                              {formatHistorical(snapshotData.incomeQuadrant.EMPLOYEE, snapshotData.currency)}
                             </div>
                           </div>
                           <div className="snapshot-card">
                             <div className="snapshot-label">Self-Employed</div>
                             <div className="snapshot-value">
-                              {formatHistorical(snapshotData.incomeQuadrant.SELF_EMPLOYED, snapshotData.date)}
+                              {formatHistorical(snapshotData.incomeQuadrant.SELF_EMPLOYED, snapshotData.currency)}
                             </div>
                           </div>
                           <div className="snapshot-card">
                             <div className="snapshot-label">Business Owner</div>
                             <div className="snapshot-value">
-                              {formatHistorical(snapshotData.incomeQuadrant.BUSINESS_OWNER, snapshotData.date)}
+                              {formatHistorical(snapshotData.incomeQuadrant.BUSINESS_OWNER, snapshotData.currency)}
                             </div>
                           </div>
                           <div className="snapshot-card">
                             <div className="snapshot-label">Investor</div>
                             <div className="snapshot-value">
-                              {formatHistorical(snapshotData.incomeQuadrant.INVESTOR, snapshotData.date)}
+                              {formatHistorical(snapshotData.incomeQuadrant.INVESTOR, snapshotData.currency)}
                             </div>
                           </div>
                         </div>
@@ -510,7 +412,7 @@ const Analysis: React.FC = () => {
                     <div className="snapshot-actions">
                       <button className="btn-primary" onClick={handleSaveSnapshot}>Save Snapshot</button>
                       <div style={{ fontSize: '.6rem', opacity: .7, marginTop: '.4rem' }}>
-                        Displaying with historical currency: {currentSnapshotCurrency.symbol} ({currentSnapshotCurrency.name})
+                        Displaying with historical currency: {snapshotData.currency.symbol} ({snapshotData.currency.name})
                       </div>
                     </div>
                   </>
@@ -530,9 +432,9 @@ const Analysis: React.FC = () => {
                         <button className="note-close" onClick={() => handleRemoveSnapshot(note.id)} aria-label="Remove snapshot">×</button>
                         <div className="note-date">{note.date}</div>
                         <div className="note-summary">
-                          <p>Net Worth: {formatCurrencyValue(note.data.balanceSheet.netWorth, { cur_symbol: note.currency.symbol, cur_name: note.currency.name } as any)}</p>
-                          <p>Net Cashflow: {formatCurrencyValue(note.data.cashflow.netCashflow, { cur_symbol: note.currency.symbol, cur_name: note.currency.name } as any)}</p>
-                          <p style={{ fontSize: '.6rem', opacity: .65 }}>Currency: {note.currency.symbol}</p>
+                          <p>Net Worth: {formatCurrencyValue(note.data.balanceSheet.netWorth, { cur_symbol: note.data.currency.symbol, cur_name: note.data.currency.name } as any)}</p>
+                          <p>Net Cashflow: {formatCurrencyValue(note.data.cashflow.netCashflow, { cur_symbol: note.data.currency.symbol, cur_name: note.data.currency.name } as any)}</p>
+                          <p style={{ fontSize: '.6rem', opacity: .65 }}>Currency: {note.data.currency.symbol}</p>
                         </div>
                       </div>
                     ))}

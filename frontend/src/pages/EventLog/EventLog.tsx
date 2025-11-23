@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { eventLogsAPI } from '../../utils/api';
 
-type EventType = 'Income' | 'Expense' | 'Asset' | 'Liability' | 'Removed' | 'Cash';
+type EventType = 'Income' | 'Expense' | 'Asset' | 'Liability' | 'Removed' | 'Cash' | 'User';
 
 interface FinancialEvent {
   id: string;
@@ -13,6 +13,7 @@ interface FinancialEvent {
   type: EventType;
   description: string;
   valueChange: number;
+  currencySymbol: string;
 }
 
 const parseNum = (v: any) => (typeof v === 'number' ? v : parseFloat(v));
@@ -55,6 +56,8 @@ const mapEntityType = (entityType: string, actionType?: string): EventType => {
       return actionType === 'DELETE' ? 'Removed' : 'Liability';
     case 'CASH_SAVINGS':
       return 'Cash';
+    case 'USER':
+      return 'User';
     default:
       return 'Removed';
   }
@@ -95,6 +98,8 @@ const EventLog: React.FC = () => {
   const [events, setEvents] = useState<FinancialEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currencySegments, setCurrencySegments] = useState<{ startDate: number; symbol: string }[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
 
   const [typeFilter, setTypeFilter] = useState<EventType | 'All'>('All');
   const [startDate, setStartDate] = useState<string>('');
@@ -104,6 +109,8 @@ const EventLog: React.FC = () => {
   const { removedKey } = usePerUserKeys(user);
 
   useEffect(() => {
+    if (!historyLoaded) return;
+
     const loadFromApi = async () => {
       setLoading(true);
       setError(null);
@@ -120,6 +127,7 @@ const EventLog: React.FC = () => {
             Liability: 'LIABILITY',
             Removed: '',
             Cash: 'CASH_SAVINGS',
+            User: 'USER',
           };
           if (map[typeFilter]) params.entityType = map[typeFilter];
         }
@@ -142,8 +150,25 @@ const EventLog: React.FC = () => {
             case 'ASSET': desc = `${prefix}: Asset${name ? ' - ' + name : ''}`; break;
             case 'LIABILITY': desc = `${prefix}: Liability${name ? ' - ' + name : ''}`; break;
             case 'CASH_SAVINGS': desc = `${prefix}: Cash Savings`; break;
-            case 'USER': desc = `Account Created`; break;
+            case 'USER': 
+              if (ev.actionType === 'UPDATE' && afterValue?.currencyCode) {
+                desc = `Currency Changed: ${beforeValue?.currencyCode || '?'} → ${afterValue.currencyCode}`;
+              } else {
+                desc = `Account Created`; 
+              }
+              break;
             default: desc = `${prefix}: ${ev.entityType}`;
+          }
+
+          // Determine historical currency symbol
+          const evTime = new Date(ev.timestamp).getTime();
+          let symbol = '$';
+          for (const seg of currencySegments) {
+            if (seg.startDate <= evTime) {
+              symbol = seg.symbol;
+            } else {
+              break;
+            }
           }
 
           return {
@@ -152,6 +177,7 @@ const EventLog: React.FC = () => {
             type,
             description: desc,
             valueChange,
+            currencySymbol: symbol,
           } as FinancialEvent;
         });
 
@@ -172,7 +198,59 @@ const EventLog: React.FC = () => {
     };
 
     loadFromApi();
-  }, [typeFilter, startDate, endDate, removedKey]);
+  }, [typeFilter, startDate, endDate, removedKey, historyLoaded, currencySegments]);
+
+  // Fetch currency history to determine historical symbols
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchHistory = async () => {
+      try {
+        // Fetch all USER events to determine currency history
+        const data = await eventLogsAPI.getEvents({ entityType: 'USER', limit: 1000 });
+        const userEvents = (data?.events || []).filter((e: any) =>
+          e.actionType === 'UPDATE' &&
+          e.afterValue && JSON.parse(e.afterValue).currencyCode
+        );
+
+        userEvents.sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+        const segments: { startDate: number; symbol: string }[] = [];
+        const currentSymbol = user.preferredCurrency?.cur_symbol || '$';
+
+        if (userEvents.length > 0) {
+          // Before first change
+          const first = userEvents[0];
+          const firstBefore = first.beforeValue ? JSON.parse(first.beforeValue) : null;
+          segments.push({
+            startDate: 0,
+            symbol: firstBefore?.currencyCode || '$'
+          });
+
+          // After each change
+          userEvents.forEach((ev: any) => {
+            const after = JSON.parse(ev.afterValue);
+            segments.push({
+              startDate: new Date(ev.timestamp).getTime(),
+              symbol: after.currencyCode
+            });
+          });
+        } else {
+          // No history, use current
+          segments.push({ startDate: 0, symbol: currentSymbol });
+        }
+
+        setCurrencySegments(segments);
+      } catch (err) {
+        console.error("Failed to fetch currency history", err);
+        setCurrencySegments([{ startDate: 0, symbol: user?.preferredCurrency?.cur_symbol || '$' }]);
+      } finally {
+        setHistoryLoaded(true);
+      }
+    };
+
+    fetchHistory();
+  }, [user]);
 
   const filtered = useMemo(() => {
     return events
@@ -247,6 +325,7 @@ const EventLog: React.FC = () => {
               <option value="Liability">Liability</option>
               <option value="Removed">Removed</option>
               <option value="Cash">Cash</option>
+              <option value="User">User</option>
             </select>
           </div>
           <div className="filter-group">
@@ -319,7 +398,7 @@ const EventLog: React.FC = () => {
                     <td className="desc-cell">{highlight(ev.description)}</td>
                     <td className={`change-cell ${ev.valueChange >= 0 ? 'pos' : 'neg'}`}>
                       {(() => {
-                        const sym = user?.preferredCurrency?.cur_symbol || '$';
+                        const sym = ev.currencySymbol || '$';
                         // keep explicit sign (+/-) and prepend currency symbol
                         const abs = Math.abs(ev.valueChange).toLocaleString();
                         return (ev.id === 'start')

@@ -12,6 +12,7 @@ interface FinancialState {
   incomeLines: Map<number, { id: number; name: string; amount: number; type: string; quadrant?: string | null }>;
   expenses: Map<number, { id: number; name: string; amount: number }>;
   cashSavings: number;
+  currency: { symbol: string; name: string };
 }
 
 /**
@@ -31,7 +32,7 @@ async function reconstructFinancialStateAtDate(userId: number, targetDate: Date)
   // Determine account creation date to bound the search window
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { createdAt: true }
+    select: { createdAt: true, PreferredCurrency: true }
   });
 
   // Get all events from account creation up to the target date (inclusive)
@@ -45,13 +46,54 @@ async function reconstructFinancialStateAtDate(userId: number, targetDate: Date)
   }
   const events = await getEventsByUser(queryParams);
 
+  // Determine initial currency state
+  // If there are currency change events, the first one's "beforeValue" is the initial state.
+  // If no currency change events exist in the entire history, the current currency is the initial state.
+  // However, we only have events up to targetDate here.
+  // To be accurate, we should check if there are ANY currency events for this user ever.
+  // But a simpler heuristic: 
+  // 1. Default to current currency.
+  // 2. If we encounter a USER/UPDATE event in the replay, we update it.
+  // 3. BUT, if the first event in our replay is a currency change, we need to know what it was BEFORE that.
+  //    The event.beforeValue holds that info.
+  //    So if we initialize with current currency, and replay:
+  //    Current: EUR.
+  //    Event 1 (Day 5): USD -> EUR.
+  //    Replay Day 3 (no events): State is EUR. WRONG. Should be USD.
+  
+  // Correct approach: Find the FIRST currency change event ever for this user.
+  const firstCurrencyEvent = await prisma.event.findFirst({
+    where: {
+      userId,
+      entityType: EntityType.USER,
+      actionType: ActionType.UPDATE
+    },
+    orderBy: { timestamp: 'asc' }
+  });
+
+  let initialCurrency = {
+    symbol: user?.PreferredCurrency?.cur_symbol || '$',
+    name: user?.PreferredCurrency?.cur_name || 'USD'
+  };
+
+  if (firstCurrencyEvent && firstCurrencyEvent.beforeValue) {
+    const before = JSON.parse(firstCurrencyEvent.beforeValue);
+    if (before.currencyCode) {
+      initialCurrency = {
+        symbol: before.currencyCode,
+        name: before.currencyName || before.currencyCode
+      };
+    }
+  }
+
   // ✅ Start with empty state (initial state)
   const state: FinancialState = {
     assets: new Map(),
     liabilities: new Map(),
     incomeLines: new Map(),
     expenses: new Map(),
-    cashSavings: 0
+    cashSavings: 0,
+    currency: initialCurrency
   };
 
   // ✅ Sort events chronologically (oldest first) for replay
@@ -85,6 +127,10 @@ async function reconstructFinancialStateAtDate(userId: number, targetDate: Date)
 
       case EntityType.CASH_SAVINGS:
         handleCashSavingsEvent(state, event.actionType as ActionType, afterValue, beforeValue);
+        break;
+
+      case EntityType.USER:
+        handleUserEvent(state, event.actionType as ActionType, afterValue);
         break;
     }
   }
@@ -261,6 +307,24 @@ function handleCashSavingsEvent(
 }
 
 /**
+ * Handle user events (UPDATE)
+ */
+function handleUserEvent(
+  state: FinancialState,
+  actionType: ActionType,
+  afterValue: any
+) {
+  if (actionType === ActionType.UPDATE && afterValue) {
+    if (afterValue.currencyCode) {
+      state.currency = {
+        symbol: afterValue.currencyCode,
+        name: afterValue.currencyName || afterValue.currencyCode
+      };
+    }
+  }
+}
+
+/**
  * Calculate financial snapshot from reconstructed state
  */
 function calculateSnapshotFromState(state: FinancialState, targetDate: Date) {
@@ -307,6 +371,7 @@ function calculateSnapshotFromState(state: FinancialState, targetDate: Date) {
 
   return {
     date: targetDate.toISOString().substring(0, 10),
+    currency: state.currency,
     balanceSheet: {
       totalCashBalance: Number(totalCashBalance),
       totalAssets: Number(totalAssets),
@@ -334,6 +399,17 @@ function calculateSnapshotFromState(state: FinancialState, targetDate: Date) {
  * Get current financial snapshot from database (no event replay)
  */
 async function getCurrentFinancialSnapshot(userId: number) {
+  // Get user's preferred currency
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { PreferredCurrency: true }
+  });
+
+  const currency = {
+    symbol: user?.PreferredCurrency?.cur_symbol || '$',
+    name: user?.PreferredCurrency?.cur_name || 'USD'
+  };
+
   // Get balance sheet data (current state)
   const balanceSheet = await prisma.balanceSheet.findFirst({
     where: { userId },
@@ -392,6 +468,7 @@ async function getCurrentFinancialSnapshot(userId: number) {
 
   return {
     date: new Date().toISOString().substring(0, 10),
+    currency,
     balanceSheet: {
       totalCashBalance: Number(totalCashBalance),
       totalAssets: Number(totalAssets),
