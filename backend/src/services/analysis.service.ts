@@ -15,92 +15,41 @@ interface FinancialState {
   currency: { symbol: string; name: string };
 }
 
+interface FinancialHealth {
+  runway: number;
+  freedomDate: string | null;
+  assetEfficiency: number;
+  trends: {
+    netWorth: number;
+    cashflow: number;
+  };
+}
+
 /**
- * Reconstruct financial state by replaying events up to a target date
- * 
- * Expected Behavior:
- * ✅ Query all events from account creation up to target date
- * ✅ Filter events: timestamp <= targetDate
- * ✅ Start with empty state (or initial state)
- * ✅ Replay events in chronological order:
- *    - CREATE events → Add entities
- *    - UPDATE events → Modify entities
- *    - DELETE events → Remove entities
- * ✅ Return reconstructed state for that specific date
+ * Reconstruct financial state from a list of events up to a target date
  */
-async function reconstructFinancialStateAtDate(userId: number, targetDate: Date): Promise<FinancialState> {
-  // Determine account creation date to bound the search window
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { createdAt: true, PreferredCurrency: true }
-  });
-
-  // Get all events from account creation up to the target date (inclusive)
-  const queryParams: any = {
-    userId,
-    endDate: targetDate,
-    limit: 100000
-  };
-  if (user?.createdAt) {
-    queryParams.startDate = user.createdAt;
-  }
-  const events = await getEventsByUser(queryParams);
-
-  // Determine initial currency state
-  // If there are currency change events, the first one's "beforeValue" is the initial state.
-  // If no currency change events exist in the entire history, the current currency is the initial state.
-  // However, we only have events up to targetDate here.
-  // To be accurate, we should check if there are ANY currency events for this user ever.
-  // But a simpler heuristic: 
-  // 1. Default to current currency.
-  // 2. If we encounter a USER/UPDATE event in the replay, we update it.
-  // 3. BUT, if the first event in our replay is a currency change, we need to know what it was BEFORE that.
-  //    The event.beforeValue holds that info.
-  //    So if we initialize with current currency, and replay:
-  //    Current: EUR.
-  //    Event 1 (Day 5): USD -> EUR.
-  //    Replay Day 3 (no events): State is EUR. WRONG. Should be USD.
-  
-  // Correct approach: Find the FIRST currency change event ever for this user.
-  const firstCurrencyEvent = await prisma.event.findFirst({
-    where: {
-      userId,
-      entityType: EntityType.USER,
-      actionType: ActionType.UPDATE
-    },
-    orderBy: { timestamp: 'asc' }
-  });
-
-  let initialCurrency = {
-    symbol: user?.PreferredCurrency?.cur_symbol || '$',
-    name: user?.PreferredCurrency?.cur_name || 'USD'
-  };
-
-  if (firstCurrencyEvent && firstCurrencyEvent.beforeValue) {
-    const before = JSON.parse(firstCurrencyEvent.beforeValue);
-    if (before.currencyCode) {
-      initialCurrency = {
-        symbol: before.currencyCode,
-        name: before.currencyName || before.currencyCode
-      };
-    }
-  }
-
-  // ✅ Start with empty state (initial state)
+function reconstructStateFromEvents(
+  events: any[], 
+  targetDate: Date, 
+  initialCurrency: { symbol: string; name: string }
+): FinancialState {
+  // Start with empty state
   const state: FinancialState = {
     assets: new Map(),
     liabilities: new Map(),
     incomeLines: new Map(),
     expenses: new Map(),
     cashSavings: 0,
-    currency: initialCurrency
+    currency: { ...initialCurrency }
   };
 
-  // ✅ Sort events chronologically (oldest first) for replay
-  events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  // Filter events up to targetDate and sort chronologically
+  const relevantEvents = events
+    .filter(e => new Date(e.timestamp) <= targetDate)
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-  // Replay each event to reconstruct state
-  for (const event of events) {
+  // Replay events
+  for (const event of relevantEvents) {
     const afterValue = event.afterValue ? JSON.parse(event.afterValue) : null;
     const beforeValue = event.beforeValue ? JSON.parse(event.beforeValue) : null;
 
@@ -108,27 +57,19 @@ async function reconstructFinancialStateAtDate(userId: number, targetDate: Date)
       case EntityType.ASSET:
         handleAssetEvent(state, event.actionType as ActionType, event.entityId, afterValue, beforeValue);
         break;
-
       case EntityType.LIABILITY:
         handleLiabilityEvent(state, event.actionType as ActionType, event.entityId, afterValue, beforeValue);
         break;
-
       case EntityType.INCOME:
-        // Skip INCOME_STATEMENT creation events
-        if (event.entitySubtype === 'INCOME_STATEMENT') {
-          break;
-        }
+        if (event.entitySubtype === 'INCOME_STATEMENT') break;
         handleIncomeEvent(state, event.actionType as ActionType, event.entityId, afterValue, beforeValue);
         break;
-
       case EntityType.EXPENSE:
         handleExpenseEvent(state, event.actionType as ActionType, event.entityId, afterValue, beforeValue);
         break;
-
       case EntityType.CASH_SAVINGS:
         handleCashSavingsEvent(state, event.actionType as ActionType, afterValue, beforeValue);
         break;
-
       case EntityType.USER:
         handleUserEvent(state, event.actionType as ActionType, afterValue);
         break;
@@ -325,9 +266,149 @@ function handleUserEvent(
 }
 
 /**
+ * Calculate financial health metrics
+ */
+function calculateFinancialHealth(
+  currentState: FinancialState,
+  prevMonthState: FinancialState | null,
+  sixMonthAgoState: FinancialState | null
+): FinancialHealth {
+  // Calculate totals for current state
+  const currentTotalAssets = Array.from(currentState.assets.values()).reduce((sum, a) => sum + a.value, 0);
+  const currentTotalLiabilities = Array.from(currentState.liabilities.values()).reduce((sum, l) => sum + l.value, 0);
+  const currentCash = currentState.cashSavings;
+  const currentNetWorth = currentTotalAssets - currentTotalLiabilities + currentCash;
+  
+  const currentIncomeLines = Array.from(currentState.incomeLines.values());
+  const currentPassiveIncome = currentIncomeLines
+    .filter(i => i.type.toUpperCase() === 'PASSIVE')
+    .reduce((sum, i) => sum + i.amount, 0);
+  const currentPortfolioIncome = currentIncomeLines
+    .filter(i => i.type.toUpperCase() === 'PORTFOLIO')
+    .reduce((sum, i) => sum + i.amount, 0);
+  const currentTotalIncome = currentIncomeLines.reduce((sum, i) => sum + i.amount, 0);
+  
+  const currentExpenses = Array.from(currentState.expenses.values()).reduce((sum, e) => sum + e.amount, 0);
+  const currentNetCashflow = currentTotalIncome - currentExpenses;
+
+  // 1. Runway: (Cash + Liquid Assets) / Monthly Expenses
+  const runway = currentExpenses > 0 ? currentCash / currentExpenses : (currentCash > 0 ? 999 : 0);
+
+  // 2. Asset Efficiency: (Passive + Portfolio) / (Total Assets - Cash)
+  // Note: In our state model, totalAssets excludes cash.
+  const assetEfficiency = currentTotalAssets > 0 
+    ? ((currentPassiveIncome + currentPortfolioIncome) / currentTotalAssets) * 100 
+    : 0;
+
+  // 3. Trends
+  let netWorthTrend = 0;
+  let cashflowTrend = 0;
+
+  if (prevMonthState) {
+    const prevAssets = Array.from(prevMonthState.assets.values()).reduce((sum, a) => sum + a.value, 0);
+    const prevLiabilities = Array.from(prevMonthState.liabilities.values()).reduce((sum, l) => sum + l.value, 0);
+    const prevCash = prevMonthState.cashSavings;
+    const prevNetWorth = prevAssets - prevLiabilities + prevCash;
+
+    const prevIncome = Array.from(prevMonthState.incomeLines.values()).reduce((sum, i) => sum + i.amount, 0);
+    const prevExpenses = Array.from(prevMonthState.expenses.values()).reduce((sum, e) => sum + e.amount, 0);
+    const prevNetCashflow = prevIncome - prevExpenses;
+
+    if (prevNetWorth !== 0) {
+      netWorthTrend = ((currentNetWorth - prevNetWorth) / Math.abs(prevNetWorth)) * 100;
+    } else if (currentNetWorth !== 0) {
+      netWorthTrend = currentNetWorth > 0 ? 100 : -100;
+    }
+    
+    if (prevNetCashflow !== 0) {
+      cashflowTrend = ((currentNetCashflow - prevNetCashflow) / Math.abs(prevNetCashflow)) * 100;
+    } else if (currentNetCashflow !== 0) {
+      cashflowTrend = currentNetCashflow > 0 ? 100 : -100;
+    }
+  }
+
+  // 4. Freedom Date
+  let freedomDate: string | null = null;
+  
+  if (currentPassiveIncome >= currentExpenses) {
+    freedomDate = "Achieved";
+  } else if (currentPassiveIncome > 0) {
+    // We have some passive income, let's try to project
+    if (sixMonthAgoState) {
+      const sixMonthPassive = Array.from(sixMonthAgoState.incomeLines.values())
+        .filter(i => i.type.toUpperCase() === 'PASSIVE')
+        .reduce((sum, i) => sum + i.amount, 0);
+      
+      // Case 1: Growth from non-zero base (Compound Growth)
+      if (sixMonthPassive > 0) {
+        if (currentPassiveIncome > sixMonthPassive) {
+          // Calculate monthly growth rate (CAGR over 6 months)
+          const growthFactor = Math.pow(currentPassiveIncome / sixMonthPassive, 1/6);
+          const r = growthFactor - 1;
+
+          if (r > 0) {
+            const monthsToFreedom = Math.log(currentExpenses / currentPassiveIncome) / Math.log(1 + r);
+            
+            if (monthsToFreedom > 0 && monthsToFreedom < 600) { // Cap at 50 years
+              const freedom = new Date();
+              freedom.setMonth(freedom.getMonth() + Math.round(monthsToFreedom));
+              freedomDate = freedom.toISOString().substring(0, 10);
+            } else {
+              freedomDate = "> 50 Years";
+            }
+          }
+        } else {
+          freedomDate = "Stagnant/Declining";
+        }
+      }
+      // Case 2: Growth from zero base (Linear Projection)
+      else {
+        // Assume linear growth over the last 6 months
+        // Average monthly addition = current / 6
+        const monthlyGrowthAmount = currentPassiveIncome / 6;
+        const gapToCover = currentExpenses - currentPassiveIncome;
+        
+        if (monthlyGrowthAmount > 0) {
+          const monthsToFreedom = gapToCover / monthlyGrowthAmount;
+          
+          if (monthsToFreedom > 0 && monthsToFreedom < 600) {
+            const freedom = new Date();
+            freedom.setMonth(freedom.getMonth() + Math.round(monthsToFreedom));
+            freedomDate = freedom.toISOString().substring(0, 10);
+          } else {
+            freedomDate = "> 50 Years";
+          }
+        }
+      }
+    } else {
+      // No history available (e.g. new account), assume linear growth from 0
+      // Treat as if we started 1 month ago for rough projection? 
+      // Or just say "Insufficient Data"
+      freedomDate = "Insufficient Data";
+    }
+  } else {
+    freedomDate = "No Passive Income";
+  }
+
+  return {
+    runway: Number(runway.toFixed(1)),
+    freedomDate,
+    assetEfficiency: Number(assetEfficiency.toFixed(2)),
+    trends: {
+      netWorth: Number(netWorthTrend.toFixed(2)),
+      cashflow: Number(cashflowTrend.toFixed(2))
+    }
+  };
+}
+
+/**
  * Calculate financial snapshot from reconstructed state
  */
-function calculateSnapshotFromState(state: FinancialState, targetDate: Date) {
+function calculateSnapshotFromState(
+  state: FinancialState, 
+  targetDate: Date,
+  financialHealth: FinancialHealth
+) {
   // Calculate balance sheet totals
   const totalAssets = Array.from(state.assets.values()).reduce((sum, asset) => sum + asset.value, 0);
   const totalLiabilities = Array.from(state.liabilities.values()).reduce((sum, liability) => sum + liability.value, 0);
@@ -391,7 +472,8 @@ function calculateSnapshotFromState(state: FinancialState, targetDate: Date) {
       passiveCoverageRatio: passiveCoverageRatio.toFixed(2),
       savingsRate: savingsRate.toFixed(2)
     },
-    incomeQuadrant
+    incomeQuadrant,
+    financialHealth
   };
 }
 
@@ -433,6 +515,27 @@ async function getCurrentFinancialSnapshot(userId: number) {
     }
   });
 
+  // Construct Current FinancialState object for Health Calculation
+  const currentState: FinancialState = {
+    assets: new Map(balanceSheet?.Asset.map(a => [a.id, { id: a.id, name: a.name, value: a.value }]) || []),
+    liabilities: new Map(balanceSheet?.Liability.map(l => [l.id, { id: l.id, name: l.name, value: l.value }]) || []),
+    incomeLines: new Map(incomeStatement?.IncomeLine.map(i => [i.id, { id: i.id, name: i.name, amount: i.amount, type: i.type, quadrant: i.quadrant }]) || []),
+    expenses: new Map(incomeStatement?.Expense.map(e => [e.id, { id: e.id, name: e.name, amount: e.amount }]) || []),
+    cashSavings: cashSavings?.amount || 0,
+    currency
+  };
+
+  // Fetch events to reconstruct past states for trends
+  const events = await getEventsByUser({ userId, limit: 100000 });
+  const now = new Date();
+  const oneMonthAgo = new Date(now); oneMonthAgo.setMonth(now.getMonth() - 1);
+  const sixMonthsAgo = new Date(now); sixMonthsAgo.setMonth(now.getMonth() - 6);
+
+  const prevMonthState = reconstructStateFromEvents(events, oneMonthAgo, currency);
+  const sixMonthAgoState = reconstructStateFromEvents(events, sixMonthsAgo, currency);
+
+  const financialHealth = calculateFinancialHealth(currentState, prevMonthState, sixMonthAgoState);
+
   // Calculate balance sheet totals
   const totalAssets = balanceSheet?.Asset.reduce((sum, asset) => sum + Number(asset.value), 0) || 0;
   const totalLiabilities = balanceSheet?.Liability.reduce((sum, liability) => sum + Number(liability.value), 0) || 0;
@@ -452,7 +555,7 @@ async function getCurrentFinancialSnapshot(userId: number) {
   const passiveCoverageRatio = totalExpenses > 0 ? (passiveIncome / totalExpenses) * 100 : 0;
   const savingsRate = totalIncome > 0 ? (netCashflow / totalIncome) * 100 : 0;
 
-  // Income quadrant distribution (Robert Kiyosaki's Cashflow Quadrant)
+  // Income quadrant distribution
   const quadrantTotals = createEmptyQuadrantTotals();
   incomeStatement?.IncomeLine?.forEach(line => {
     const bucket = determineIncomeQuadrant(line.type, line.quadrant);
@@ -488,7 +591,8 @@ async function getCurrentFinancialSnapshot(userId: number) {
       passiveCoverageRatio: passiveCoverageRatio.toFixed(2),
       savingsRate: savingsRate.toFixed(2)
     },
-    incomeQuadrant
+    incomeQuadrant,
+    financialHealth
   };
 }
 
@@ -517,6 +621,57 @@ export const getFinancialSnapshot = async (userId: number, date?: string) => {
   }
 
   // For historical dates, reconstruct state from events
-  const state = await reconstructFinancialStateAtDate(userId, targetDate);
-  return calculateSnapshotFromState(state, targetDate);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { createdAt: true, PreferredCurrency: true }
+  });
+
+  // Get all events from account creation up to the target date (inclusive)
+  const queryParams: any = {
+    userId,
+    endDate: targetDate,
+    limit: 100000
+  };
+  if (user?.createdAt) {
+    queryParams.startDate = user.createdAt;
+  }
+  const events = await getEventsByUser(queryParams);
+
+  // Determine initial currency
+  const firstCurrencyEvent = await prisma.event.findFirst({
+    where: {
+      userId,
+      entityType: EntityType.USER,
+      actionType: ActionType.UPDATE
+    },
+    orderBy: { timestamp: 'asc' }
+  });
+
+  let initialCurrency = {
+    symbol: user?.PreferredCurrency?.cur_symbol || '$',
+    name: user?.PreferredCurrency?.cur_name || 'USD'
+  };
+
+  if (firstCurrencyEvent && firstCurrencyEvent.beforeValue) {
+    const before = JSON.parse(firstCurrencyEvent.beforeValue);
+    if (before.currencyCode) {
+      initialCurrency = {
+        symbol: before.currencyCode,
+        name: before.currencyName || before.currencyCode
+      };
+    }
+  }
+
+  const state = reconstructStateFromEvents(events, targetDate, initialCurrency);
+  
+  // Reconstruct past states for trends
+  const oneMonthAgo = new Date(targetDate); oneMonthAgo.setMonth(targetDate.getMonth() - 1);
+  const sixMonthsAgo = new Date(targetDate); sixMonthsAgo.setMonth(targetDate.getMonth() - 6);
+  
+  const prevMonthState = reconstructStateFromEvents(events, oneMonthAgo, initialCurrency);
+  const sixMonthAgoState = reconstructStateFromEvents(events, sixMonthsAgo, initialCurrency);
+
+  const financialHealth = calculateFinancialHealth(state, prevMonthState, sixMonthAgoState);
+
+  return calculateSnapshotFromState(state, targetDate, financialHealth);
 };
