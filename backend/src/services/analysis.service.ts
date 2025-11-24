@@ -358,7 +358,7 @@ async function getCurrentFinancialSnapshot(userId: number) {
 
   // Income quadrant distribution (Robert Kiyosaki's Cashflow Quadrant)
   const quadrantTotals = createEmptyQuadrantTotals();
-  incomeStatement?.IncomeLine?.forEach(line => {
+  incomeStatement?.IncomeLine?.forEach((line: any) => {
     const bucket = determineIncomeQuadrant(line.type, line.quadrant);
     quadrantTotals[bucket] += Number(line.amount);
   });
