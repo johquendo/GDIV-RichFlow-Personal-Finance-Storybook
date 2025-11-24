@@ -4,7 +4,10 @@ import Header from '../../components/Header/Header';
 import { useAuth } from '../../context/AuthContext';
 import { analysisAPI } from '../../utils/api';
 import { formatCurrency as formatCurrencyValue } from '../../utils/currency.utils';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
+import { 
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend,
+  AreaChart, Area, LineChart, Line, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, ComposedChart, ReferenceDot
+} from 'recharts';
 
 type SnapshotData = {
   date: string;
@@ -63,12 +66,22 @@ type SavedSnapshot = {
 type TrajectoryPoint = {
   date: string;
   netWorth: number;
+  netWorthDelta: number; // change vs previous point
   passiveIncome: number;
+  portfolioIncome: number;
   totalExpenses: number;
   freedomGap: number;
-  wealthVelocity: number;
+  wealthVelocity: number; // percent form
+  assetEfficiency: number;
   netCashflow: number;
   totalIncome: number;
+  incomeQuadrant: {
+    EMPLOYEE: number;
+    SELF_EMPLOYED: number;
+    BUSINESS_OWNER: number;
+    INVESTOR: number;
+  };
+  currency: string; // symbol for change markers
 };
 
 
@@ -134,7 +147,6 @@ const Analysis: React.FC = () => {
   const [compareResult, setCompareResult] = useState<{ start: SnapshotData; end: SnapshotData } | null>(null);
 
   // Trajectory state for velocity and freedom gap visualization
-  const [showTrajectory, setShowTrajectory] = useState(false);
   const [trajectoryStart, setTrajectoryStart] = useState('');
   const [trajectoryEnd, setTrajectoryEnd] = useState('');
   const [trajectoryInterval, setTrajectoryInterval] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
@@ -249,6 +261,20 @@ const Analysis: React.FC = () => {
     }
   };
 
+  // Default load last 12 months trajectory on mount
+  useEffect(() => {
+    const today = new Date();
+    const endStr = today.toISOString().split('T')[0];
+    const start = new Date(today); start.setFullYear(today.getFullYear() - 1);
+    const startStr = start.toISOString().split('T')[0];
+    setTrajectoryStart(startStr);
+    setTrajectoryEnd(endStr);
+  }, []);
+  useEffect(() => {
+    if (trajectoryStart && trajectoryEnd) fetchTrajectoryData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trajectoryStart, trajectoryEnd, trajectoryInterval]);
+
   const compareMetrics = useMemo(() => {
     if (!compareResult) return null;
     const { start, end } = compareResult;
@@ -357,69 +383,53 @@ const Analysis: React.FC = () => {
   }, [compareResult, compareStart, compareEnd]);
 
   // Trajectory metrics - compute key insights for Freedom Gap visualization
+  const processedTrajectory = useMemo(() => {
+    if (!trajectoryData || trajectoryData.length === 0) return [];
+    // Add percent quadrant evolution & currency change detection
+    return trajectoryData.map((p, idx) => {
+      const totalIQ = p.incomeQuadrant.EMPLOYEE + p.incomeQuadrant.SELF_EMPLOYED + p.incomeQuadrant.BUSINESS_OWNER + p.incomeQuadrant.INVESTOR || 1;
+      const prev = trajectoryData[idx - 1];
+      const currencyChanged = prev ? prev.currency !== p.currency : false;
+      return {
+        ...p,
+        quadrantPct: {
+          EMPLOYEE: (p.incomeQuadrant.EMPLOYEE / totalIQ) * 100,
+          SELF_EMPLOYED: (p.incomeQuadrant.SELF_EMPLOYED / totalIQ) * 100,
+          BUSINESS_OWNER: (p.incomeQuadrant.BUSINESS_OWNER / totalIQ) * 100,
+          INVESTOR: (p.incomeQuadrant.INVESTOR / totalIQ) * 100,
+        },
+        currencyChanged,
+        gapArea: p.totalExpenses > p.passiveIncome ? (p.totalExpenses - p.passiveIncome) : 0,
+        surplusArea: p.passiveIncome > p.totalExpenses ? (p.passiveIncome - p.totalExpenses) : 0
+      };
+    });
+  }, [trajectoryData]);
+
+  // Trajectory high-level metrics
   const trajectoryMetrics = useMemo(() => {
     if (!trajectoryData || trajectoryData.length === 0) return null;
-
     const first = trajectoryData[0];
     const last = trajectoryData[trajectoryData.length - 1];
-
-    // Calculate Freedom Gap trend (negative means moving toward freedom)
     const freedomGapChange = last.freedomGap - first.freedomGap;
-    const freedomGapTrend = first.freedomGap !== 0 
-      ? (freedomGapChange / Math.abs(first.freedomGap)) * 100 
-      : 0;
-
-    // Wealth Velocity trend
+    const freedomGapTrend = first.freedomGap !== 0 ? (freedomGapChange / Math.abs(first.freedomGap)) * 100 : 0;
     const velocityChange = last.wealthVelocity - first.wealthVelocity;
-
-    // Net Worth growth
     const netWorthChange = last.netWorth - first.netWorth;
-    const netWorthGrowthRate = first.netWorth !== 0 
-      ? (netWorthChange / Math.abs(first.netWorth)) * 100 
-      : 0;
-
-    // Passive Income growth
+    const netWorthGrowthRate = first.netWorth !== 0 ? (netWorthChange / Math.abs(first.netWorth)) * 100 : 0;
     const passiveIncomeChange = last.passiveIncome - first.passiveIncome;
-    const passiveIncomeGrowthRate = first.passiveIncome !== 0 
-      ? (passiveIncomeChange / Math.abs(first.passiveIncome)) * 100 
-      : 0;
-
-    // Find when Freedom Gap crosses zero (if it does)
-    const freedomCrossoverPoint = trajectoryData.find(
-      (point, index) => index > 0 && point.freedomGap <= 0 && trajectoryData[index - 1].freedomGap > 0
-    );
-
+    const passiveIncomeGrowthRate = first.passiveIncome !== 0 ? (passiveIncomeChange / Math.abs(first.passiveIncome)) * 100 : 0;
+    const freedomCrossoverPoint = trajectoryData.find((p, idx) => idx>0 && p.freedomGap <=0 && trajectoryData[idx-1].freedomGap>0);
     return {
       startDate: first.date,
       endDate: last.date,
       dataPoints: trajectoryData.length,
-      freedomGap: {
-        start: first.freedomGap,
-        end: last.freedomGap,
-        change: freedomGapChange,
-        trendPercent: freedomGapTrend,
-        crossoverDate: freedomCrossoverPoint?.date || null,
-      },
-      wealthVelocity: {
-        start: first.wealthVelocity,
-        end: last.wealthVelocity,
-        change: velocityChange,
-      },
-      netWorth: {
-        start: first.netWorth,
-        end: last.netWorth,
-        change: netWorthChange,
-        growthRate: netWorthGrowthRate,
-      },
-      passiveIncome: {
-        start: first.passiveIncome,
-        end: last.passiveIncome,
-        change: passiveIncomeChange,
-        growthRate: passiveIncomeGrowthRate,
-      },
+      freedomGap: { start: first.freedomGap, end: last.freedomGap, change: freedomGapChange, trendPercent: freedomGapTrend, crossoverDate: freedomCrossoverPoint?.date || null },
+      wealthVelocity: { start: first.wealthVelocity, end: last.wealthVelocity, change: velocityChange },
+      netWorth: { start: first.netWorth, end: last.netWorth, change: netWorthChange, growthRate: netWorthGrowthRate },
+      passiveIncome: { start: first.passiveIncome, end: last.passiveIncome, change: passiveIncomeChange, growthRate: passiveIncomeGrowthRate }
     };
   }, [trajectoryData]);
 
+  // Timeline controller (date picker)
   const timelineController = (
     <div className="flex items-center gap-3 bg-zinc-900/80 border border-white/10 rounded-full px-4 py-1.5 backdrop-blur-sm">
       <span className="text-zinc-400 text-xs uppercase tracking-wider font-medium">Time Machine</span>
@@ -432,45 +442,46 @@ const Analysis: React.FC = () => {
         className="bg-transparent border-none text-white text-sm focus:ring-0 p-0 cursor-pointer [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-calendar-picker-indicator]:hover:opacity-100"
       />
       {selectedDate && (
-        <button
-          onClick={() => { setSelectedDate(''); fetchSnapshot(); }}
-          className="ml-2 text-xs text-[#FFD700] hover:text-[#FFD700]/80 transition-colors"
-        >
-          Reset
-        </button>
+        <button onClick={() => { setSelectedDate(''); fetchSnapshot(); }} className="ml-2 text-xs text-[#FFD700] hover:text-[#FFD700]/80 transition-colors">Reset</button>
       )}
     </div>
   );
 
+  // Header right content (timeline + compare toggle)
   const headerRight = (
     <div className="flex items-center gap-3">
       {timelineController}
       <button
-        onClick={() => setShowCompare((s) => !s)}
+        onClick={() => setShowCompare(s => !s)}
         aria-pressed={showCompare}
-        className={`px-3 py-1.5 rounded-full border text-sm transition-all ${
-          showCompare
-            ? 'bg-zinc-900/80 border-[#9d6dd4]/50 text-white shadow-[0_0_0_2px_rgba(157,109,212,0.25),0_0_18px_rgba(157,109,212,0.55)] hover:shadow-[0_0_0_2px_rgba(157,109,212,0.35),0_0_24px_rgba(157,109,212,0.75)]'
-            : 'bg-zinc-900/60 border-white/10 text-white hover:bg-zinc-900'
-        }`}
+        className={`px-3 py-1.5 rounded-full border text-sm transition-all ${showCompare ? 'bg-zinc-900/80 border-[#9d6dd4]/50 text-white shadow-[0_0_0_2px_rgba(157,109,212,0.25),0_0_18px_rgba(157,109,212,0.55)] hover:shadow-[0_0_0_2px_rgba(157,109,212,0.35),0_0_24px_rgba(157,109,212,0.75)]' : 'bg-zinc-900/60 border-white/10 text-white hover:bg-zinc-900'}`}
         title="Compare two dates"
-      >
-        Compare
-      </button>
-      <button
-        onClick={() => setShowTrajectory((s) => !s)}
-        aria-pressed={showTrajectory}
-        className={`px-3 py-1.5 rounded-full border text-sm transition-all ${
-          showTrajectory
-            ? 'bg-zinc-900/80 border-[#FFD700]/50 text-white shadow-[0_0_0_2px_rgba(255,215,0,0.25),0_0_18px_rgba(255,215,0,0.55)] hover:shadow-[0_0_0_2px_rgba(255,215,0,0.35),0_0_24px_rgba(255,215,0,0.75)]'
-            : 'bg-zinc-900/60 border-white/10 text-white hover:bg-zinc-900'
-        }`}
-        title="View financial velocity and freedom trajectory"
-      >
-        Trajectory
-      </button>
+      >Compare</button>
     </div>
   );
+
+  const handleJumpToSnapshot = (date: string) => {
+    setSelectedDate(date);
+  };
+
+  const ChartTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload || payload.length === 0) return null;
+    return (
+      <div className="rounded-md border border-zinc-700 bg-zinc-900/90 p-3 text-xs shadow-lg min-w-[180px]">
+        <div className="font-semibold text-white mb-1">{new Date(label).toLocaleDateString()}</div>
+        {payload.map((p: any) => (
+          <div key={p.dataKey} className="flex justify-between gap-2">
+            <span className="text-zinc-400">{p.name}</span>
+            <span className="text-white">{typeof p.value === 'number' ? (p.dataKey.includes('Pct') || p.name?.includes('%') || p.dataKey === 'assetEfficiency' || p.dataKey === 'wealthVelocity' ? `${p.value.toFixed(2)}%` : formatCurrencyValue(p.value, user?.preferredCurrency)) : p.value}</span>
+          </div>
+        ))}
+        <button
+          onClick={() => handleJumpToSnapshot(label)}
+          className="mt-2 w-full rounded bg-[#FFD700] text-black font-semibold py-1 hover:bg-[#e6c300] transition"
+        >Jump to Snapshot</button>
+      </div>
+    );
+  };
 
   if (loading && !snapshotData) {
     return (
@@ -489,144 +500,9 @@ const Analysis: React.FC = () => {
           {/* Background Ambient Glow */}
           <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-[#800080]/20 rounded-full blur-[120px] pointer-events-none" />
           <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-[#FFD700]/10 rounded-full blur-[120px] pointer-events-none" />
-
-          {showCompare && (
-          <div className="px-6 md:px-8">
-            <div className="max-w-7xl mx-auto mt-4 mb-2 rounded-2xl bg-zinc-900/50 border border-white/5 p-4 flex flex-col md:flex-row items-center gap-3">
-              <span className="text-zinc-400 text-xs uppercase tracking-wider">Compare Period</span>
-              <div className="flex items-center gap-2">
-                <div className="relative flex items-center gap-1">
-                  <input
-                    ref={startRef}
-                    type="date"
-                    value={compareStart}
-                    onChange={(e) => { setCompareStart(e.target.value); setCompareResult(null); }}
-                    max={compareEnd || new Date().toISOString().split('T')[0]}
-                    className="bg-transparent border border-white/10 rounded-lg px-3 py-1.5 text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => openNativePicker(startRef.current)}
-                    className="p-1.5 rounded-md border border-white/10 text-zinc-300 hover:bg-zinc-800 hover:text-white transition"
-                    aria-label="Open start date calendar"
-                    title="Open calendar"
-                  >
-                    {/* calendar icon */}
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6">
-                      <rect x="3" y="4" width="18" height="18" rx="2" />
-                      <path d="M16 2v4M8 2v4M3 10h18" />
-                    </svg>
-                  </button>
-                </div>
-
-                <span className="text-zinc-500">→</span>
-
-                <div className="relative flex items-center gap-1">
-                  <input
-                    ref={endRef}
-                    type="date"
-                    value={compareEnd}
-                    onChange={(e) => { setCompareEnd(e.target.value); setCompareResult(null); }}
-                    min={compareStart || undefined}
-                    max={new Date().toISOString().split('T')[0]}
-                    className="bg-transparent border border-white/10 rounded-lg px-3 py-1.5 text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => openNativePicker(endRef.current)}
-                    className="p-1.5 rounded-md border border-white/10 text-zinc-300 hover:bg-zinc-800 hover:text-white transition"
-                    aria-label="Open end date calendar"
-                    title="Open calendar"
-                  >
-                    {/* calendar icon */}
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6">
-                      <rect x="3" y="4" width="18" height="18" rx="2" />
-                      <path d="M16 2v4M8 2v4M3 10h18" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              <div className="ml-auto flex items-center gap-2">
-                {compareStart && compareEnd && safeDate(compareEnd) >= safeDate(compareStart) && (
-                  <button
-                    onClick={fetchCompareReport}
-                    disabled={compareLoading}
-                    className="px-3 py-1.5 rounded-lg bg-[#FFD700] text-black text-sm font-semibold hover:bg-[#e6c300] disabled:opacity-50"
-                  >
-                    {compareLoading ? 'Generating…' : 'Generate Report'}
-                  </button>
-                )}
-                {!!compareResult && (
-                  <button
-                    onClick={() => setCompareResult(null)}
-                    className="px-3 py-1.5 rounded-lg border border-white/10 text-sm text-zinc-300 hover:bg-zinc-800"
-                  >
-                    Clear report
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showTrajectory && (
-          <div className="px-6 md:px-8">
-            <div className="max-w-7xl mx-auto mt-4 mb-2 rounded-2xl bg-zinc-900/50 border border-[#FFD700]/20 p-4 flex flex-col md:flex-row items-center gap-3">
-              <span className="text-[#FFD700] text-xs uppercase tracking-wider font-semibold">Trajectory Analysis</span>
-              <div className="flex items-center gap-2">
-                <input
-                  type="date"
-                  value={trajectoryStart}
-                  onChange={(e) => { setTrajectoryStart(e.target.value); setTrajectoryData([]); }}
-                  max={trajectoryEnd || new Date().toISOString().split('T')[0]}
-                  className="bg-transparent border border-white/10 rounded-lg px-3 py-1.5 text-sm"
-                  placeholder="Start Date"
-                />
-                <span className="text-zinc-500">→</span>
-                <input
-                  type="date"
-                  value={trajectoryEnd}
-                  onChange={(e) => { setTrajectoryEnd(e.target.value); setTrajectoryData([]); }}
-                  min={trajectoryStart || undefined}
-                  max={new Date().toISOString().split('T')[0]}
-                  className="bg-transparent border border-white/10 rounded-lg px-3 py-1.5 text-sm"
-                  placeholder="End Date"
-                />
-                <select
-                  value={trajectoryInterval}
-                  onChange={(e) => { setTrajectoryInterval(e.target.value as any); setTrajectoryData([]); }}
-                  className="bg-transparent border border-white/10 rounded-lg px-3 py-1.5 text-sm"
-                >
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
-              </div>
-              <div className="ml-auto flex items-center gap-2">
-                {trajectoryStart && trajectoryEnd && (
-                  <button
-                    onClick={fetchTrajectoryData}
-                    disabled={trajectoryLoading}
-                    className="px-3 py-1.5 rounded-lg bg-[#FFD700] text-black text-sm font-semibold hover:bg-[#e6c300] disabled:opacity-50 transition-all"
-                  >
-                    {trajectoryLoading ? 'Loading…' : 'Analyze Trajectory'}
-                  </button>
-                )}
-                {trajectoryData.length > 0 && (
-                  <button
-                    onClick={() => setTrajectoryData([])}
-                    className="px-3 py-1.5 rounded-lg border border-white/10 text-sm text-zinc-300 hover:bg-zinc-800 transition-all"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-        
-        <main className="flex-1 overflow-y-auto p-6 md:p-8 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-          {trajectoryMetrics && (
+          <main className="flex-1 overflow-y-auto p-6 md:p-8 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+            {/* Snapshot Cards */}
+          {trajectoryMetrics && snapshotData && (
             <div className="max-w-7xl mx-auto mb-6 rounded-2xl bg-linear-to-br from-zinc-900/80 to-zinc-900/60 border border-[#FFD700]/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -679,20 +555,184 @@ const Analysis: React.FC = () => {
                 />
               </div>
 
-              {/* Chart Placeholder - TO BE IMPLEMENTED BY TEAM MEMBER */}
-              <div className="p-8 rounded-xl bg-zinc-900/50 border border-[#FFD700]/10 text-center">
-                <div className="text-zinc-400 mb-2">📊 Chart Visualization Area</div>
-                <p className="text-sm text-zinc-500">
-                  Charts will be implemented here showing:
-                </p>
-                <ul className="text-xs text-zinc-600 mt-2 space-y-1">
-                  <li>• Freedom Gap over time (Expenses - Passive Income)</li>
-                  <li>• Wealth Velocity trend</li>
-                  <li>• Net Worth trajectory</li>
-                  <li>• Passive Income growth curve</li>
-                </ul>
-                <div className="mt-4 text-xs text-zinc-500 font-mono">
-                  Data available in <code className="bg-zinc-800 px-2 py-1 rounded">trajectoryData</code> state ({trajectoryData.length} points)
+              {/* Charts Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* 1. The Rat Race Escape: Expenses vs Passive Income */}
+                <div className="p-6 rounded-xl bg-zinc-900/50 border border-white/5">
+                  <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-green-400"></span>
+                    The Rat Race Escape
+                  </h3>
+                  <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={processedTrajectory}>
+                        <defs>
+                          <linearGradient id="colorPassive" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#4ade80" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#4ade80" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#f87171" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#f87171" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                        <XAxis 
+                          dataKey="date" 
+                          stroke="#71717a" 
+                          tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, { month: 'short', year: '2-digit' })}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis 
+                          stroke="#71717a" 
+                          tickFormatter={(val) => `$${val/1000}k`}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <RechartsTooltip content={<ChartTooltip />} />
+                        <Legend />
+                        <Line type="monotone" dataKey="totalExpenses" name="Expenses" stroke="#f87171" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="passiveIncome" name="Passive Income" stroke="#4ade80" strokeWidth={2} dot={false} />
+                        {/* Freedom Gap shaded area */}
+                        <Area type="monotone" dataKey="gapArea" name="Freedom Gap" stroke="none" fill="url(#colorExpenses)" />
+                        {/* Crossover Point */}
+                        {processedTrajectory.map((p, idx) => {
+                          const prev = processedTrajectory[idx - 1];
+                          if (idx > 0 && p.passiveIncome >= p.totalExpenses && prev.passiveIncome < prev.totalExpenses) {
+                            return (
+                              <ReferenceDot key={p.date} x={p.date} y={p.passiveIncome} r={6} fill="#4ade80" stroke="#18181b" />
+                            );
+                          }
+                          return null;
+                        })}
+                        {/* Currency change markers */}
+                        {processedTrajectory.filter(p => p.currencyChanged).map(p => (
+                          <ReferenceLine key={`cur-${p.date}`} x={p.date} stroke="#FFD700" strokeDasharray="4 2" label={{ value: p.currency, position: 'top', fill: '#FFD700', fontSize: 10 }} />
+                        ))}
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* 2. Net Worth & Velocity */}
+                <div className="p-6 rounded-xl bg-zinc-900/50 border border-white/5">
+                  <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#FFD700]"></span>
+                    Net Worth & Velocity
+                  </h3>
+                  <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={processedTrajectory}>
+                        <defs>
+                          <linearGradient id="colorNetWorth" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#FFD700" stopOpacity={0.2}/>
+                            <stop offset="95%" stopColor="#FFD700" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                        <XAxis 
+                          dataKey="date" 
+                          stroke="#71717a" 
+                          tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, { month: 'short', year: '2-digit' })}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis 
+                          yAxisId="left"
+                          stroke="#FFD700" 
+                          tickFormatter={(val) => `$${val/1000}k`}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis 
+                          yAxisId="right"
+                          orientation="right"
+                          stroke="#c084fc" 
+                          tickFormatter={(val) => `${val.toFixed(1)}%`}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <RechartsTooltip content={<ChartTooltip />} />
+                        <Legend />
+                        <Line yAxisId="left" type="monotone" dataKey="netWorth" name="Net Worth" stroke="#FFD700" strokeWidth={2} dot={false} />
+                        <Bar yAxisId="right" dataKey="netWorthDelta" name="Wealth Velocity" fill="#c084fc" radius={[4,4,0,0]} />
+                        {processedTrajectory.filter(p => p.currencyChanged).map(p => (
+                          <ReferenceLine key={`cur-nw-${p.date}`} x={p.date} stroke="#FFD700" strokeDasharray="4 2" />
+                        ))}
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* 3. Asset Efficiency Trend */}
+                <div className="p-6 rounded-xl bg-zinc-900/50 border border-white/5">
+                  <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                    Asset Efficiency (ROA)
+                  </h3>
+                  <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={processedTrajectory}>
+                        <defs>
+                          <linearGradient id="colorEfficiency" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#60a5fa" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                        <XAxis 
+                          dataKey="date" 
+                          stroke="#71717a" 
+                          tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, { month: 'short', year: '2-digit' })}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis 
+                          stroke="#71717a" 
+                          tickFormatter={(val) => `${val}%`}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <RechartsTooltip content={<ChartTooltip />} />
+                        <Legend />
+                        <Line type="monotone" dataKey="assetEfficiency" name="Return on Assets" stroke="#60a5fa" strokeWidth={2} dot={false} />
+                        {processedTrajectory.filter(p => p.currencyChanged).map(p => (
+                          <ReferenceLine key={`cur-roa-${p.date}`} x={p.date} stroke="#FFD700" strokeDasharray="4 2" />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* 4. Quadrant Evolution */}
+                <div className="p-6 rounded-xl bg-zinc-900/50 border border-white/5">
+                  <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+                    Quadrant Evolution
+                  </h3>
+                  <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={processedTrajectory}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                        <XAxis 
+                          dataKey="date" 
+                          stroke="#71717a" 
+                          tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, { month: 'short', year: '2-digit' })}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis 
+                          stroke="#71717a" 
+                          tickFormatter={(val) => `${val.toFixed(0)}%`}
+                          tick={{ fontSize: 12 }}
+                          domain={[0,100]}
+                        />
+                        <RechartsTooltip content={<ChartTooltip />} />
+                        <Legend />
+                        <Area type="monotone" dataKey="quadrantPct.EMPLOYEE" name="Employee" stackId="1" stroke={QUADRANT_COLORS.EMPLOYEE} fill={QUADRANT_COLORS.EMPLOYEE} />
+                        <Area type="monotone" dataKey="quadrantPct.SELF_EMPLOYED" name="Self-Employed" stackId="1" stroke={QUADRANT_COLORS.SELF_EMPLOYED} fill={QUADRANT_COLORS.SELF_EMPLOYED} />
+                        <Area type="monotone" dataKey="quadrantPct.BUSINESS_OWNER" name="Business Owner" stackId="1" stroke={QUADRANT_COLORS.BUSINESS_OWNER} fill={QUADRANT_COLORS.BUSINESS_OWNER} />
+                        <Area type="monotone" dataKey="quadrantPct.INVESTOR" name="Investor" stackId="1" stroke={QUADRANT_COLORS.INVESTOR} fill={QUADRANT_COLORS.INVESTOR} />
+                        {processedTrajectory.filter(p => p.currencyChanged).map(p => (
+                          <ReferenceLine key={`cur-iq-${p.date}`} x={p.date} stroke="#FFD700" strokeDasharray="4 2" />
+                        ))}
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </div>
             </div>

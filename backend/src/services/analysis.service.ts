@@ -821,6 +821,7 @@ export const getFinancialTrajectory = async (
     
     // Calculate trajectory metrics
     const totalAssets = Array.from(state.assets.values()).reduce((sum, asset) => sum + asset.value, 0);
+    // BUGFIX: reference correct parameter name 'liability' instead of undefined 'l'
     const totalLiabilities = Array.from(state.liabilities.values()).reduce((sum, liability) => sum + liability.value, 0);
     const totalCash = state.cashSavings;
     const netWorth = totalAssets - totalLiabilities + totalCash;
@@ -828,6 +829,9 @@ export const getFinancialTrajectory = async (
     const incomeLines = Array.from(state.incomeLines.values());
     const passiveIncome = incomeLines
       .filter(i => i.type.toUpperCase() === 'PASSIVE')
+      .reduce((sum, i) => sum + i.amount, 0);
+    const portfolioIncome = incomeLines
+      .filter(i => i.type.toUpperCase() === 'PORTFOLIO')
       .reduce((sum, i) => sum + i.amount, 0);
     const totalIncome = incomeLines.reduce((sum, i) => sum + i.amount, 0);
     
@@ -840,15 +844,39 @@ export const getFinancialTrajectory = async (
     // Wealth Velocity = Net Cashflow / Net Worth (if positive net worth)
     const wealthVelocity = netWorth > 0 ? (netCashflow / netWorth) : 0;
 
+    // Asset Efficiency = (Passive + Portfolio) / Total Invested Assets
+    const assetEfficiency = totalAssets > 0 
+      ? ((passiveIncome + portfolioIncome) / totalAssets) * 100 
+      : 0;
+
+    // Income Quadrant Breakdown
+    const quadrantTotals = createEmptyQuadrantTotals();
+    incomeLines.forEach(line => {
+      const bucket = determineIncomeQuadrant(line.type, line.quadrant);
+      quadrantTotals[bucket] += line.amount;
+    });
+
+    // Derive net worth delta (wealth velocity bars) vs previous point
+    let netWorthDelta = 0;
+    if (trajectoryPoints.length > 0) {
+      const prev = trajectoryPoints[trajectoryPoints.length - 1];
+      netWorthDelta = netWorth - prev.netWorth;
+    }
+
     trajectoryPoints.push({
       date: currentDate.toISOString().split('T')[0],
       netWorth,
+      netWorthDelta, // raw change for bar representation
       passiveIncome,
+      portfolioIncome,
       totalExpenses,
       freedomGap,
-      wealthVelocity: wealthVelocity * 100, // as percentage
+      wealthVelocity: wealthVelocity * 100, // percentage form retained
+      assetEfficiency,
       netCashflow,
-      totalIncome
+      totalIncome,
+      incomeQuadrant: quadrantTotals,
+      currency: state.currency.symbol // include currency marker for front-end change detection
     });
 
     currentDate = incrementDate(currentDate);
