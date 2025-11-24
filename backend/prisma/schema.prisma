@@ -114,4 +114,5 @@ model Event {
   @@index([userId])
   @@index([entityType])
   @@index([entityId])
+  @@index([userId, timestamp])
 }
