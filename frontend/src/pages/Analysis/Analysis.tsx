@@ -467,18 +467,25 @@ const Analysis: React.FC = () => {
   const ChartTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || payload.length === 0) return null;
     return (
-      <div className="rounded-md border border-zinc-700 bg-zinc-900/90 p-3 text-xs shadow-lg min-w-[180px]">
-        <div className="font-semibold text-white mb-1">{new Date(label).toLocaleDateString()}</div>
+      <div 
+        onClick={() => handleJumpToSnapshot(label)}
+        className="rounded-md border border-zinc-700 bg-zinc-900/95 backdrop-blur-sm p-3 text-xs shadow-xl min-w-[180px] cursor-pointer hover:border-[#FFD700] transition-colors"
+        style={{ zIndex: 1000, pointerEvents: 'auto' }}
+        title="Click to view snapshot"
+      >
+        <div className="font-semibold text-white mb-1 flex items-center justify-between">
+          <span>{new Date(label).toLocaleDateString()}</span>
+          <span className="text-[#FFD700] text-[10px]">📸 SNAPSHOT</span>
+        </div>
         {payload.map((p: any) => (
           <div key={p.dataKey} className="flex justify-between gap-2">
             <span className="text-zinc-400">{p.name}</span>
             <span className="text-white">{typeof p.value === 'number' ? (p.dataKey.includes('Pct') || p.name?.includes('%') || p.dataKey === 'assetEfficiency' || p.dataKey === 'wealthVelocity' ? `${p.value.toFixed(2)}%` : formatCurrencyValue(p.value, user?.preferredCurrency)) : p.value}</span>
           </div>
         ))}
-        <button
-          onClick={() => handleJumpToSnapshot(label)}
-          className="mt-2 w-full rounded bg-[#FFD700] text-black font-semibold py-1 hover:bg-[#e6c300] transition"
-        >Jump to Snapshot</button>
+        <div className="mt-2 pt-2 border-t border-zinc-700 text-center text-[10px] text-zinc-500">
+          Click to jump to this date
+        </div>
       </div>
     );
   };
@@ -589,12 +596,16 @@ const Analysis: React.FC = () => {
                           tickFormatter={(val) => `$${val/1000}k`}
                           tick={{ fontSize: 12 }}
                         />
-                        <RechartsTooltip content={<ChartTooltip />} />
+                        <RechartsTooltip 
+                          content={<ChartTooltip />}
+                          wrapperStyle={{ pointerEvents: 'auto' }}
+                          cursor={{ stroke: '#FFD700', strokeWidth: 1, strokeDasharray: '5 5' }}
+                        />
                         <Legend />
-                        <Line type="monotone" dataKey="totalExpenses" name="Expenses" stroke="#f87171" strokeWidth={2} dot={false} />
-                        <Line type="monotone" dataKey="passiveIncome" name="Passive Income" stroke="#4ade80" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="totalExpenses" name="Expenses" stroke="#f87171" strokeWidth={2} dot={false} animationDuration={0} />
+                        <Line type="monotone" dataKey="passiveIncome" name="Passive Income" stroke="#4ade80" strokeWidth={2} dot={false} animationDuration={0} />
                         {/* Freedom Gap shaded area */}
-                        <Area type="monotone" dataKey="gapArea" name="Freedom Gap" stroke="none" fill="url(#colorExpenses)" />
+                        <Area type="monotone" dataKey="gapArea" name="Freedom Gap" stroke="none" fill="url(#colorExpenses)" animationDuration={0} />
                         {/* Crossover Point */}
                         {processedTrajectory.map((p, idx) => {
                           const prev = processedTrajectory[idx - 1];
@@ -649,10 +660,14 @@ const Analysis: React.FC = () => {
                           tickFormatter={(val) => `${val.toFixed(1)}%`}
                           tick={{ fontSize: 12 }}
                         />
-                        <RechartsTooltip content={<ChartTooltip />} />
+                        <RechartsTooltip 
+                          content={<ChartTooltip />}
+                          wrapperStyle={{ pointerEvents: 'auto' }}
+                          cursor={{ stroke: '#FFD700', strokeWidth: 1, strokeDasharray: '5 5' }}
+                        />
                         <Legend />
-                        <Line yAxisId="left" type="monotone" dataKey="netWorth" name="Net Worth" stroke="#FFD700" strokeWidth={2} dot={false} />
-                        <Bar yAxisId="right" dataKey="netWorthDelta" name="Wealth Velocity" fill="#c084fc" radius={[4,4,0,0]} />
+                        <Line yAxisId="left" type="monotone" dataKey="netWorth" name="Net Worth" stroke="#FFD700" strokeWidth={2} dot={false} animationDuration={0} />
+                        <Bar yAxisId="right" dataKey="netWorthDelta" name="Wealth Velocity" fill="#c084fc" radius={[4,4,0,0]} animationDuration={0} />
                         {processedTrajectory.filter(p => p.currencyChanged).map(p => (
                           <ReferenceLine key={`cur-nw-${p.date}`} x={p.date} stroke="#FFD700" strokeDasharray="4 2" />
                         ))}
@@ -1146,14 +1161,17 @@ const Analysis: React.FC = () => {
                 className="col-span-1"
               />
               <StatCard
-                title={snapshotData.richFlowMetrics.freedomGap > 0 ? "Freedom Gap" : "Freedom Surplus"}
+                title={snapshotData.richFlowMetrics.freedomGap > 0 ? "Freedom Gap" : "Financial Freedom"}
                 value={
-                  <span className={snapshotData.richFlowMetrics.freedomGap > 0 ? "text-orange-400" : "text-green-400"}>
-                    {snapshotData.richFlowMetrics.freedomGap > 0 ? '-' : '+'}
-                    {formatHistorical(Math.abs(snapshotData.richFlowMetrics.freedomGap), snapshotData.currency)}
-                  </span>
+                  snapshotData.richFlowMetrics.freedomGap <= 0 ? (
+                    <span className="text-[#FFD700] font-bold">ACHIEVED 🎉</span>
+                  ) : (
+                    <span className="text-orange-400">
+                      -{formatHistorical(Math.abs(snapshotData.richFlowMetrics.freedomGap), snapshotData.currency)}
+                    </span>
+                  )
                 }
-                subValue={snapshotData.richFlowMetrics.freedomGap > 0 ? "To Go" : "Surplus"}
+                subValue={snapshotData.richFlowMetrics.freedomGap > 0 ? "To Go" : "Passive Income Covers Expenses"}
                 className="col-span-1"
                 accentColor={snapshotData.richFlowMetrics.freedomGap > 0 ? 'default' : 'gold'}
               />
@@ -1168,4 +1186,3 @@ const Analysis: React.FC = () => {
 };
 
 export default Analysis;
-
