@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } from 'react';
 import Sidebar from '../../components/Sidebar/Sidebar';
+import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header/Header';
 import { useAuth } from '../../context/AuthContext';
 import { analysisAPI } from '../../utils/api';
@@ -8,6 +9,7 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend,
   AreaChart, Area, LineChart, Line, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, ComposedChart, ReferenceDot
 } from 'recharts';
+import './Analysis.css';
 
 type SnapshotData = {
   date: string;
@@ -139,8 +141,12 @@ const StatCard: React.FC<{
 
 const Analysis: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [slowSnapshot, setSlowSnapshot] = useState(false);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
+  const deferredSelectedDate = useDeferredValue(selectedDate);
   const [snapshotData, setSnapshotData] = useState<SnapshotData | null>(null);
 
   // Compare state
@@ -148,6 +154,8 @@ const Analysis: React.FC = () => {
   const [compareStart, setCompareStart] = useState('');
   const [compareEnd, setCompareEnd] = useState('');
   const [compareLoading, setCompareLoading] = useState(false);
+  const [slowCompare, setSlowCompare] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
   const [compareResult, setCompareResult] = useState<{ start: SnapshotData; end: SnapshotData } | null>(null);
 
   // Trajectory state for velocity and freedom gap visualization
@@ -155,7 +163,26 @@ const Analysis: React.FC = () => {
   const [trajectoryEnd, setTrajectoryEnd] = useState('');
   const [trajectoryInterval, setTrajectoryInterval] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
   const [trajectoryLoading, setTrajectoryLoading] = useState(false);
+  const [slowTrajectory, setSlowTrajectory] = useState(false);
+  const [trajectoryError, setTrajectoryError] = useState<string | null>(null);
   const [trajectoryData, setTrajectoryData] = useState<TrajectoryPoint[]>([]);
+
+  // Abort controllers
+  // Request id tracking for cancellation emulation
+  const snapshotReqIdRef = useRef(0);
+  const compareReqIdRef = useRef(0);
+  const trajectoryReqIdRef = useRef(0);
+
+  // Performance constants
+  const SLOW_THRESHOLD_MS = 200;
+  const MAX_TRAJECTORY_POINTS = 1500;
+
+  const formatError = (err: unknown): string => {
+    if (!err) return 'Unknown error';
+    if (typeof err === 'string') return err;
+    if (err instanceof Error) return err.message || 'Unexpected error';
+    try { return JSON.stringify(err); } catch { return 'Unexpected error'; }
+  };
 
   // Mini calendar refs and opener
   const startRef = React.useRef<HTMLInputElement>(null);
@@ -185,15 +212,24 @@ const Analysis: React.FC = () => {
   );
 
   const fetchSnapshot = async (date?: string) => {
+    const reqId = ++snapshotReqIdRef.current;
+    setSnapshotError(null);
+    setLoading(true);
+    setSlowSnapshot(false);
+    const startTs = performance.now();
+    const slowTimer = setTimeout(() => setSlowSnapshot(true), SLOW_THRESHOLD_MS);
     try {
-      setLoading(true);
       const data = await analysisAPI.getFinancialSnapshot(date);
+      if (reqId !== snapshotReqIdRef.current) return; // stale
       setSnapshotData(data);
       if (!date) setSelectedDate('');
     } catch (error) {
       console.error('Failed to fetch snapshot:', error);
+      setSnapshotError(formatError(error));
     } finally {
+      clearTimeout(slowTimer);
       setLoading(false);
+      setSlowSnapshot(performance.now() - startTs > SLOW_THRESHOLD_MS);
     }
   };
 
@@ -202,10 +238,10 @@ const Analysis: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (selectedDate) {
-      fetchSnapshot(selectedDate);
+    if (deferredSelectedDate) {
+      fetchSnapshot(deferredSelectedDate);
     }
-  }, [selectedDate]);
+  }, [deferredSelectedDate]);
 
   // Reset comparison state when toggled off
   useEffect(() => {
@@ -243,33 +279,83 @@ const Analysis: React.FC = () => {
 
   const fetchCompareReport = async () => {
     if (!compareStart || !compareEnd) return;
+    const reqId = ++compareReqIdRef.current;
+    setCompareError(null);
     setCompareLoading(true);
+    setSlowCompare(false);
+    const slowTimer = setTimeout(() => setSlowCompare(true), SLOW_THRESHOLD_MS);
     try {
       const [startSnap, endSnap] = await Promise.all([
         analysisAPI.getFinancialSnapshot(compareStart),
         analysisAPI.getFinancialSnapshot(compareEnd),
       ]);
+      if (reqId !== compareReqIdRef.current) return; // stale
       setCompareResult({ start: startSnap, end: endSnap });
     } catch (e) {
       console.error('Failed to fetch comparison report:', e);
+      setCompareError(formatError(e));
     } finally {
+      clearTimeout(slowTimer);
       setCompareLoading(false);
     }
   };
 
+  // Downsampling (simple bucket average)
+  const downsample = useCallback((data: TrajectoryPoint[], max: number): TrajectoryPoint[] => {
+    if (data.length <= max) return data;
+    const bucketSize = data.length / max;
+    const result: TrajectoryPoint[] = [];
+    for (let i = 0; i < max; i++) {
+      const start = Math.floor(i * bucketSize);
+      const end = Math.min(Math.floor((i + 1) * bucketSize), data.length);
+      const slice = data.slice(start, end);
+      if (!slice.length) continue;
+      const mid = slice[Math.floor(slice.length / 2)];
+      const sum = (key: keyof TrajectoryPoint) => slice.reduce((acc, p) => acc + (p[key] as number), 0);
+      result.push({
+        date: mid.date,
+        netWorth: sum('netWorth') / slice.length,
+        netWorthDelta: sum('netWorthDelta') / slice.length,
+        passiveIncome: sum('passiveIncome') / slice.length,
+        portfolioIncome: sum('portfolioIncome') / slice.length,
+        totalExpenses: sum('totalExpenses') / slice.length,
+        freedomGap: sum('freedomGap') / slice.length,
+        wealthVelocity: sum('wealthVelocity') / slice.length,
+        assetEfficiency: sum('assetEfficiency') / slice.length,
+        netCashflow: sum('netCashflow') / slice.length,
+        totalIncome: sum('totalIncome') / slice.length,
+        incomeQuadrant: {
+          EMPLOYEE: slice.reduce((a, p) => a + p.incomeQuadrant.EMPLOYEE, 0) / slice.length,
+          SELF_EMPLOYED: slice.reduce((a, p) => a + p.incomeQuadrant.SELF_EMPLOYED, 0) / slice.length,
+          BUSINESS_OWNER: slice.reduce((a, p) => a + p.incomeQuadrant.BUSINESS_OWNER, 0) / slice.length,
+          INVESTOR: slice.reduce((a, p) => a + p.incomeQuadrant.INVESTOR, 0) / slice.length,
+        },
+        currency: mid.currency
+      });
+    }
+    return result;
+  }, []);
+
   const fetchTrajectoryData = async () => {
     if (!trajectoryStart || !trajectoryEnd) return;
+    const reqId = ++trajectoryReqIdRef.current;
+    setTrajectoryError(null);
     setTrajectoryLoading(true);
+    setSlowTrajectory(false);
+    const slowTimer = setTimeout(() => setSlowTrajectory(true), SLOW_THRESHOLD_MS);
     try {
       const data = await analysisAPI.getFinancialTrajectory(
         trajectoryStart,
         trajectoryEnd,
         trajectoryInterval
       );
+      console.log('Trajectory data loaded:', data?.length || 0, 'points');
       setTrajectoryData(data);
     } catch (e) {
       console.error('Failed to fetch trajectory data:', e);
+      setTrajectoryData([]);
     } finally {
+      clearTimeout(slowTimer);
       setTrajectoryLoading(false);
     }
   };
@@ -473,27 +559,37 @@ const Analysis: React.FC = () => {
     };
   }, [trajectoryData]);
 
+  // Debug log
+  useEffect(() => {
+    console.log('Chart render check:', {
+      hasMetrics: !!trajectoryMetrics,
+      hasSnapshotData: !!snapshotData,
+      trajectoryDataLength: trajectoryData?.length || 0,
+      processedLength: processedTrajectory?.length || 0
+    });
+  }, [trajectoryMetrics, snapshotData, trajectoryData, processedTrajectory]);
+
   // Timeline controller (date picker)
   const timelineController = (
-    <div className="flex items-center gap-3 bg-zinc-900/80 border border-white/10 rounded-full px-4 py-1.5 backdrop-blur-sm">
-      <span className="text-zinc-400 text-xs uppercase tracking-wider font-medium">Time Machine</span>
-      <div className="h-4 w-px bg-white/10" />
+    <div className="time-machine-controller">
+      <span className="time-machine-label">Time Machine</span>
+      <div className="time-machine-divider" />
       <input
         type="date"
         value={selectedDate}
         onChange={(e) => setSelectedDate(e.target.value)}
         max={new Date().toISOString().split('T')[0]}
-        className="bg-transparent border-none text-white text-sm focus:ring-0 p-0 cursor-pointer [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-calendar-picker-indicator]:hover:opacity-100"
+        className="time-machine-input [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-calendar-picker-indicator]:hover:opacity-100"
       />
       {selectedDate && (
-        <button onClick={() => { setSelectedDate(''); fetchSnapshot(); }} className="ml-2 text-xs text-[#FFD700] hover:text-[#FFD700]/80 transition-colors">Reset</button>
+        <button onClick={() => { setSelectedDate(''); fetchSnapshot(); }} className="time-machine-reset">Reset</button>
       )}
     </div>
   );
 
   // Header right content (timeline + compare toggle)
   const headerRight = (
-    <div className="flex items-center gap-3">
+    <div className="analysis-header-right">
       {timelineController}
 
       {showCompare && (
@@ -536,7 +632,7 @@ const Analysis: React.FC = () => {
       <button
         onClick={() => setShowCompare(s => !s)}
         aria-pressed={showCompare}
-        className={`px-3 py-1.5 rounded-full border text-sm transition-all ${showCompare ? 'bg-zinc-900/80 border-[#9d6dd4]/50 text-white shadow-[0_0_0_2px_rgba(157,109,212,0.25),0_0_18px_rgba(157,109,212,0.55)] hover:shadow-[0_0_0_2px_rgba(157,109,212,0.35),0_0_24px_rgba(157,109,212,0.75)]' : 'bg-zinc-900/60 border-white/10 text-white hover:bg-zinc-900'}`}
+        className={`compare-button ${showCompare ? 'active' : 'inactive'}`}
         title="Compare two dates"
       >Compare</button>
     </div>
@@ -575,7 +671,11 @@ const Analysis: React.FC = () => {
   if (loading && !snapshotData) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-black text-white">
-        <div className="animate-pulse text-[#FFD700]">Loading Financial Data...</div>
+        <div className="flex flex-col items-center gap-2">
+          <div className="animate-pulse text-[#FFD700] text-sm">Loading Financial Data...</div>
+          {slowSnapshot && <div className="text-xs text-zinc-500">Fetching snapshot…</div>}
+          {snapshotError && <div className="text-xs text-red-400">{snapshotError}</div>}
+        </div>
       </div>
     );
   }
@@ -584,12 +684,128 @@ const Analysis: React.FC = () => {
     <div className="flex flex-col h-screen w-full bg-black text-white overflow-hidden  selection:bg-[#FFD700]/30">
       <Header title="Analysis" hideActions rightContent={headerRight} />
       <div className="flex flex-1 overflow-hidden relative">
-        <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden relative">
           {/* Background Ambient Glow */}
           <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-[#800080]/20 rounded-full blur-[120px] pointer-events-none" />
           <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-[#FFD700]/10 rounded-full blur-[120px] pointer-events-none" />
           <main className="flex-1 overflow-y-auto p-6 md:p-8 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+            {(snapshotError || compareError || trajectoryError) && (
+              <div className="max-w-7xl mx-auto mb-4 space-y-2">
+                {snapshotError && (
+                  <div className="rounded-lg border border-red-600/30 bg-red-950/40 px-4 py-2 text-xs text-red-300 flex justify-between">
+                    <span>Snapshot Error: {snapshotError}</span>
+                    <button onClick={() => setSnapshotError(null)} className="text-red-400 hover:text-red-300">Dismiss</button>
+                  </div>
+                )}
+                {compareError && (
+                  <div className="rounded-lg border border-red-600/30 bg-red-950/40 px-4 py-2 text-xs text-red-300 flex justify-between">
+                    <span>Compare Error: {compareError}</span>
+                    <button onClick={() => setCompareError(null)} className="text-red-400 hover:text-red-300">Dismiss</button>
+                  </div>
+                )}
+                {trajectoryError && (
+                  <div className="rounded-lg border border-red-600/30 bg-red-950/40 px-4 py-2 text-xs text-red-300 flex justify-between">
+                    <span>Trajectory Error: {trajectoryError}</span>
+                    <button onClick={() => setTrajectoryError(null)} className="text-red-400 hover:text-red-300">Dismiss</button>
+                  </div>
+                )}
+              </div>
+            )}
+            {(slowCompare && compareLoading) && (
+              <div className="fixed top-20 right-4 z-50 rounded-full bg-zinc-900/80 border border-[#9d6dd4]/40 px-3 py-1 text-[10px] text-[#9d6dd4] shadow-lg">Generating comparison…</div>
+            )}
+            {(slowTrajectory && trajectoryLoading) && (
+              <div className="fixed top-32 right-4 z-50 rounded-full bg-zinc-900/80 border border-[#FFD700]/40 px-3 py-1 text-[10px] text-[#FFD700] shadow-lg">Updating trajectory…</div>
+            )}
+            {showCompare && (
+              <div className="max-w-7xl mx-auto mb-6 rounded-2xl bg-zinc-900/70 border border-white/5 p-4 md:p-6">
+                <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+                  <h2 className="text-sm md:text-base font-semibold text-white">Compare Two Dates</h2>
+                  {compareResult && (
+                    <button
+                      onClick={() => setCompareResult(null)}
+                      className="text-xs px-3 py-1.5 rounded-full border border-white/10 text-zinc-300 hover:text-white hover:bg-zinc-800"
+                    >Clear Report</button>
+                  )}
+                </div>
+
+                <div className="flex flex-col md:flex-row items-center gap-4">
+                  {/* Start Date */}
+                  <div className="flex items-center gap-2 w-full md:w-auto">
+                    <span className="text-xs uppercase tracking-wider text-zinc-400">Start</span>
+                    <div className="relative flex-1 md:flex-none">
+                      <input
+                        ref={startRef}
+                        type="date"
+                        value={compareStart}
+                        onChange={(e) => setCompareStart(e.target.value)}
+                        max={compareEnd || new Date().toISOString().split('T')[0]}
+                        className="bg-zinc-900/60 border border-white/10 text-white text-sm rounded-lg px-3 py-2 w-full md:w-48 focus:outline-none focus:ring-1 focus:ring-[#9d6dd4] cursor-pointer [&::-webkit-calendar-picker-indicator]:invert"
+                      />
+                    </div>
+                    <button
+                      onClick={() => openNativePicker(startRef.current)}
+                      className="text-xs px-2 py-1 rounded-md border border-white/10 text-zinc-300 hover:bg-zinc-800"
+                      title="Open calendar"
+                    >Pick</button>
+                  </div>
+
+                  <div className="text-zinc-600">→</div>
+
+                  {/* End Date */}
+                  <div className="flex items-center gap-2 w-full md:w-auto">
+                    <span className="text-xs uppercase tracking-wider text-zinc-400">End</span>
+                    <div className="relative flex-1 md:flex-none">
+                      <input
+                        ref={endRef}
+                        type="date"
+                        value={compareEnd}
+                        onChange={(e) => setCompareEnd(e.target.value)}
+                        min={compareStart || undefined}
+                        max={new Date().toISOString().split('T')[0]}
+                        className="bg-zinc-900/60 border border-white/10 text-white text-sm rounded-lg px-3 py-2 w-full md:w-48 focus:outline-none focus:ring-1 focus:ring-[#9d6dd4] cursor-pointer [&::-webkit-calendar-picker-indicator]:invert"
+                      />
+                    </div>
+                    <button
+                      onClick={() => openNativePicker(endRef.current)}
+                      className="text-xs px-2 py-1 rounded-md border border-white/10 text-zinc-300 hover:bg-zinc-800"
+                      title="Open calendar"
+                    >Pick</button>
+                  </div>
+
+                  {/* Swap */}
+                  <button
+                    onClick={() => {
+                      if (!compareStart || !compareEnd) return;
+                      setCompareStart(compareEnd);
+                      setCompareEnd(compareStart);
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-full border border-white/10 text-zinc-300 hover:text-white hover:bg-zinc-800"
+                    title="Swap dates"
+                  >Swap</button>
+
+                  {/* Generate Button */}
+                  {(() => {
+                    const startOk = !!compareStart;
+                    const endOk = !!compareEnd;
+                    const rangeOk = startOk && endOk && safeDate(compareStart) <= safeDate(compareEnd);
+                    return (
+                      <button
+                        onClick={fetchCompareReport}
+                        disabled={!rangeOk || compareLoading}
+                        className={`ml-auto md:ml-0 px-4 py-2 rounded-full text-sm transition-all ${rangeOk && !compareLoading
+                          ? 'bg-[#9d6dd4]/20 text-white border border-[#9d6dd4]/40 hover:bg-[#9d6dd4]/30 shadow-[0_0_0_2px_rgba(157,109,212,0.25),0_0_18px_rgba(157,109,212,0.55)]'
+                          : 'bg-zinc-900/60 text-zinc-500 border border-white/10 cursor-not-allowed'
+                        }`}
+                        title={rangeOk ? 'Generate comparison report' : 'Pick valid start and end dates'}
+                      >
+                        {compareLoading ? 'Generating…' : 'Generate Report'}
+                      </button>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
             {compareMetrics && (
               <div className="max-w-7xl mx-auto mb-6 rounded-2xl bg-zinc-900/60 border border-white/5 p-6">
                 <div className="flex items-center justify-between mb-4">
@@ -889,24 +1105,25 @@ const Analysis: React.FC = () => {
                 </div>
 
                 {/* Income Quadrant Chart */}
-                <div className="col-span-1 md:col-span-2 lg:col-span-2 row-span-2 bg-zinc-900/50 backdrop-blur-md border border-white/5 rounded-2xl p-6 flex flex-col">
-                  <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-4">Income Quadrant</h3>
+                <div className="col-span-1 md:col-span-2 lg:col-span-2 row-span-2 bg-zinc-900/50 backdrop-blur-md border border-white/5 rounded-2xl p-3 md:p-6 flex flex-col">
+                  <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-2 md:mb-4">Income Quadrant</h3>
 
-                  <div className="flex flex-col md:flex-row items-center gap-6 flex-1 min-h-0">
+                  <div className="flex flex-col lg:flex-row items-start gap-4 lg:gap-8">
                     {/* Chart Container */}
-                    <div className="flex-1 w-full h-[250px] relative">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={quadrantData.length > 0 ? quadrantData : [{ name: 'No Data', value: 1, color: '#27272a' }]}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={80}
-                            paddingAngle={5}
-                            dataKey="value"
-                            stroke="none"
-                          >
+                    <div className="flex flex-col items-center w-full lg:w-[320px] shrink-0">
+                      <div className="relative flex items-center justify-center w-full mx-auto h-80" style={{ width: '100%', maxWidth: '100%', height: 320, minHeight: 320, position: 'relative' }}>
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                          <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                            <Pie
+                              data={quadrantData.length > 0 ? quadrantData : [{ name: 'No Data', value: 1, color: '#27272a' }]}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={70}
+                              outerRadius={110}
+                              paddingAngle={5}
+                              dataKey="value"
+                              stroke="none"
+                            >
                             {quadrantData.length > 0 ? (
                               quadrantData.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(0,0,0,0.5)" />
@@ -917,65 +1134,86 @@ const Analysis: React.FC = () => {
                           </Pie>
                           {quadrantData.length > 0 && (
                             <RechartsTooltip
-                              contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', color: '#fff' }}
+                              cursor={false}
+                              contentStyle={{ backgroundColor: 'rgba(24, 24, 27, 0.95)', borderColor: '#27272a', borderRadius: '8px', color: '#fff' }}
                               itemStyle={{ color: '#fff' }}
                               formatter={(value: number) => formatHistorical(value, snapshotData.currency)}
+                              wrapperStyle={{ zIndex: 1000 }}
+                              position={{ x: 0, y: 0 }}
                             />
                           )}
-                          <Legend verticalAlign="bottom" height={36} iconType="circle" />
                         </PieChart>
-                      </ResponsiveContainer>
-                      {/* Center Text */}
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="text-center">
-                          <div className="text-xs text-zinc-500">Total</div>
-                          <div className="text-sm font-bold text-white">
-                            {formatHistorical(snapshotData.cashflow.totalIncome, snapshotData.currency)}
+                        </ResponsiveContainer>
+                        {/* Center Text - Hidden on mobile */}
+                        <div className="absolute hidden lg:block" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+                          <div className="text-center">
+                            <div className="text-xs text-zinc-500 mb-1">Total</div>
+                            <div className="text-lg font-bold text-white whitespace-nowrap">
+                              {formatHistorical(snapshotData.cashflow.totalIncome, snapshotData.currency)}
+                            </div>
                           </div>
                         </div>
+                      </div>
+                      
+                      {/* Total below chart on mobile */}
+                      <div className="lg:hidden text-center mt-4">
+                        <div className="text-xs text-zinc-500 mb-1">Total</div>
+                        <div className="text-xl font-bold text-white">
+                          {formatHistorical(snapshotData.cashflow.totalIncome, snapshotData.currency)}
+                        </div>
+                      </div>
+                      
+                      {/* Legend below chart */}
+                      <div className="flex flex-wrap justify-center gap-4 mt-4">
+                        {quadrantData.map((entry, index) => (
+                          <div key={`legend-${index}`} className="flex items-center gap-2">
+                            <div style={{ width: 12, height: 12, backgroundColor: entry.color, borderRadius: '50%' }} />
+                            <span className="text-sm text-zinc-300">{entry.name}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
                     {/* Detailed Breakdown */}
-                    <div className="w-full md:w-auto md:min-w-60">
-                      <div className="grid grid-cols-2 md:grid-cols-1 gap-3 text-sm">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span style={{ width: 10, height: 10, background: QUADRANT_COLORS.EMPLOYEE, borderRadius: 999 }} />
-                            <span className="text-zinc-400">Employee</span>
+                    <div className="w-full lg:w-auto lg:min-w-60 lg:max-w-xs">
+                      <div className="flex flex-col lg:grid lg:grid-cols-1 gap-3 text-sm">
+                        <div className="flex items-center justify-between gap-2 max-w-sm mx-auto w-full">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span style={{ width: 10, height: 10, background: QUADRANT_COLORS.EMPLOYEE, borderRadius: 999 }} className="shrink-0" />
+                            <span className="text-zinc-400 truncate">Employee</span>
                           </div>
-                          <div className="text-right">
-                            <div className="font-semibold">{formatHistorical(snapshotData.incomeQuadrant.EMPLOYEE.amount, snapshotData.currency)}</div>
+                          <div className="text-right shrink-0">
+                            <div className="font-semibold whitespace-nowrap">{formatHistorical(snapshotData.incomeQuadrant.EMPLOYEE.amount, snapshotData.currency)}</div>
                             <div className="text-xs text-zinc-500">{snapshotData.incomeQuadrant.EMPLOYEE.pct.toFixed(1)}%</div>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span style={{ width: 10, height: 10, background: QUADRANT_COLORS.SELF_EMPLOYED, borderRadius: 999 }} />
-                            <span className="text-zinc-400">Self-Employed</span>
+                        <div className="flex items-center justify-between gap-2 max-w-sm mx-auto w-full">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span style={{ width: 10, height: 10, background: QUADRANT_COLORS.SELF_EMPLOYED, borderRadius: 999 }} className="shrink-0" />
+                            <span className="text-zinc-400 truncate">Self-Employed</span>
                           </div>
-                          <div className="text-right">
-                            <div className="font-semibold">{formatHistorical(snapshotData.incomeQuadrant.SELF_EMPLOYED.amount, snapshotData.currency)}</div>
+                          <div className="text-right shrink-0">
+                            <div className="font-semibold whitespace-nowrap">{formatHistorical(snapshotData.incomeQuadrant.SELF_EMPLOYED.amount, snapshotData.currency)}</div>
                             <div className="text-xs text-zinc-500">{snapshotData.incomeQuadrant.SELF_EMPLOYED.pct.toFixed(1)}%</div>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span style={{ width: 10, height: 10, background: QUADRANT_COLORS.BUSINESS_OWNER, borderRadius: 999 }} />
-                            <span className="text-zinc-400">Business Owner</span>
+                        <div className="flex items-center justify-between gap-2 max-w-sm mx-auto w-full">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span style={{ width: 10, height: 10, background: QUADRANT_COLORS.BUSINESS_OWNER, borderRadius: 999 }} className="shrink-0" />
+                            <span className="text-zinc-400 truncate">Business Owner</span>
                           </div>
-                          <div className="text-right">
-                            <div className="font-semibold">{formatHistorical(snapshotData.incomeQuadrant.BUSINESS_OWNER.amount, snapshotData.currency)}</div>
+                          <div className="text-right shrink-0">
+                            <div className="font-semibold whitespace-nowrap">{formatHistorical(snapshotData.incomeQuadrant.BUSINESS_OWNER.amount, snapshotData.currency)}</div>
                             <div className="text-xs text-zinc-500">{snapshotData.incomeQuadrant.BUSINESS_OWNER.pct.toFixed(1)}%</div>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span style={{ width: 10, height: 10, background: QUADRANT_COLORS.INVESTOR, borderRadius: 999 }} />
-                            <span className="text-zinc-400">Investor</span>
+                        <div className="flex items-center justify-between gap-2 max-w-sm mx-auto w-full">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span style={{ width: 10, height: 10, background: QUADRANT_COLORS.INVESTOR, borderRadius: 999 }} className="shrink-0" />
+                            <span className="text-zinc-400 truncate">Investor</span>
                           </div>
-                          <div className="text-right">
-                            <div className="font-semibold">{formatHistorical(snapshotData.incomeQuadrant.INVESTOR.amount, snapshotData.currency)}</div>
+                          <div className="text-right shrink-0">
+                            <div className="font-semibold whitespace-nowrap">{formatHistorical(snapshotData.incomeQuadrant.INVESTOR.amount, snapshotData.currency)}</div>
                             <div className="text-xs text-zinc-500">{snapshotData.incomeQuadrant.INVESTOR.pct.toFixed(1)}%</div>
                           </div>
                         </div>
@@ -1016,6 +1254,18 @@ const Analysis: React.FC = () => {
                   accentColor={snapshotData.richFlowMetrics.freedomGap > 0 ? 'default' : 'gold'}
                 />
 
+              </div>
+            )}
+
+            {snapshotData && !trajectoryMetrics && !trajectoryLoading && (
+              <div className="max-w-7xl mx-auto mb-6 rounded-2xl bg-zinc-900/50 border border-white/5 p-8 text-center">
+                <p className="text-zinc-400">No trajectory data available yet. Add financial data to see your progress over time.</p>
+              </div>
+            )}
+
+            {trajectoryLoading && (
+              <div className="max-w-7xl mx-auto mb-6 rounded-2xl bg-zinc-900/50 border border-white/5 p-8 text-center">
+                <p className="text-zinc-400">Loading trajectory data...</p>
               </div>
             )}
 
@@ -1079,14 +1329,14 @@ const Analysis: React.FC = () => {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
 
                     {/* 1. The Rat Race Escape */}
-                    <div className="p-6 rounded-xl bg-zinc-900/50 border border-white/5">
-                      <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <div className="p-3 md:p-6 rounded-xl bg-zinc-900/50 border border-white/5">
+                      <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-2 md:mb-4 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-green-400"></span>
                         The Rat Race Escape
                       </h3>
-                      <div className="h-[300px] min-h-[300px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={processedTrajectory}>
+                      <div className="w-full h-80 chart-container-responsive" style={{ width: '100%', height: 320, minHeight: 320, position: 'relative' }}>
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                          <ComposedChart data={processedTrajectory} margin={{ top: 5, right: 20, bottom: 60, left: 10 }}>
                             <defs>
                               <linearGradient id="colorPassive" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#4ade80" stopOpacity={0.3} />
@@ -1106,16 +1356,18 @@ const Analysis: React.FC = () => {
                               dataKey="date"
                               stroke="#71717a"
                               tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, { month: 'short', year: '2-digit' })}
-                              tick={{ fontSize: 12 }}
+                              tick={{ fontSize: 10, fill: '#71717a' }}
+                              style={{ background: 'none' }}
                             />
                             <YAxis
                               stroke="#71717a"
                               tickFormatter={(val) => `$${val / 1000}k`}
-                              tick={{ fontSize: 12 }}
+                              tick={{ fontSize: 12, fill: '#71717a' }}
+                              style={{ background: 'none' }}
                               domain={['auto', 'auto']}
                             />
                             <RechartsTooltip content={<ChartTooltip />} />
-                            <Legend />
+                            <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px', fontSize: '12px' }} verticalAlign="bottom" />
                             <Line type="monotone" dataKey="totalExpenses" name="Expenses" stroke="#f87171" strokeWidth={2} dot={false} />
                             <Line type="monotone" dataKey="passiveIncome" name="Passive Income" stroke="#4ade80" strokeWidth={2} dot={false} />
 
@@ -1140,14 +1392,14 @@ const Analysis: React.FC = () => {
                     </div>
 
                     {/* 2. Net Worth & Velocity */}
-                    <div className="p-6 rounded-xl bg-zinc-900/50 border border-white/5">
-                      <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <div className="p-3 md:p-6 rounded-xl bg-zinc-900/50 border border-white/5">
+                      <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-2 md:mb-4 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-[#FFD700]"></span>
                         Net Worth & Velocity
                       </h3>
-                      <div className="h-[300px] min-h-[300px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={processedTrajectory}>
+                      <div className="w-full h-80 chart-container-responsive" style={{ width: '100%', height: 320, minHeight: 320, position: 'relative' }}>
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                          <ComposedChart data={processedTrajectory} margin={{ top: 5, right: 20, bottom: 60, left: 10 }}>
                             <defs>
                               <linearGradient id="colorNetWorth" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#FFD700" stopOpacity={0.3} />
@@ -1159,13 +1411,15 @@ const Analysis: React.FC = () => {
                               dataKey="date"
                               stroke="#71717a"
                               tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, { month: 'short', year: '2-digit' })}
-                              tick={{ fontSize: 12 }}
+                              tick={{ fontSize: 10, fill: '#71717a' }}
+                              style={{ background: 'none' }}
                             />
                             <YAxis
                               yAxisId="left"
                               stroke="#FFD700"
                               tickFormatter={(val) => `$${val / 1000}k`}
-                              tick={{ fontSize: 12 }}
+                              tick={{ fontSize: 12, fill: '#FFD700' }}
+                              style={{ background: 'none' }}
                               domain={['auto', 'auto']}
                             />
                             <YAxis
@@ -1177,7 +1431,7 @@ const Analysis: React.FC = () => {
                               domain={['auto', 'auto']}
                             />
                             <RechartsTooltip content={<ChartTooltip />} />
-                            <Legend />
+                            <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px', fontSize: '12px' }} verticalAlign="bottom" />
                             <Line yAxisId="left" type="monotone" dataKey="netWorth" name="Net Worth" stroke="#FFD700" strokeWidth={2} dot={false} />
                             <Bar yAxisId="right" dataKey="netWorthDelta" name="Wealth Velocity" fill="#c084fc" radius={[4, 4, 0, 0]} />
                             {processedTrajectory.filter(p => p.currencyChanged).map(p => (
@@ -1189,14 +1443,14 @@ const Analysis: React.FC = () => {
                     </div>
 
                     {/* 3. Asset Efficiency Trend */}
-                    <div className="p-6 rounded-xl bg-zinc-900/50 border border-white/5">
-                      <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <div className="p-3 md:p-6 rounded-xl bg-zinc-900/50 border border-white/5">
+                      <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-2 md:mb-4 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-blue-400"></span>
                         Asset Efficiency (ROA)
                       </h3>
-                      <div className="h-[300px] min-h-[300px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={processedTrajectory}>
+                      <div className="w-full h-80 chart-container-responsive" style={{ width: '100%', height: 320, minHeight: 320, position: 'relative' }}>
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                          <LineChart data={processedTrajectory} margin={{ top: 5, right: 20, bottom: 60, left: 10 }}>
                             <defs>
                               <linearGradient id="colorEfficiency" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.3} />
@@ -1208,16 +1462,18 @@ const Analysis: React.FC = () => {
                               dataKey="date"
                               stroke="#71717a"
                               tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, { month: 'short', year: '2-digit' })}
-                              tick={{ fontSize: 12 }}
+                              tick={{ fontSize: 10, fill: '#71717a' }}
+                              style={{ background: 'none' }}
                             />
                             <YAxis
                               stroke="#71717a"
                               tickFormatter={(val) => `${val}%`}
-                              tick={{ fontSize: 12 }}
+                              tick={{ fontSize: 12, fill: '#71717a' }}
+                              style={{ background: 'none' }}
                               domain={['auto', 'auto']}
                             />
                             <RechartsTooltip content={<ChartTooltip />} />
-                            <Legend />
+                            <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px', fontSize: '12px' }} verticalAlign="bottom" />
                             <Line type="monotone" dataKey="assetEfficiency" name="Return on Assets" stroke="#60a5fa" strokeWidth={2} dot={false} />
                             {processedTrajectory.filter(p => p.currencyChanged).map(p => (
                               <ReferenceLine key={`cur-roa-${p.date}`} x={p.date} stroke="#FFD700" strokeDasharray="4 2" />
@@ -1228,29 +1484,31 @@ const Analysis: React.FC = () => {
                     </div>
 
                     {/* 4. Quadrant Evolution */}
-                    <div className="p-6 rounded-xl bg-zinc-900/50 border border-white/5">
-                      <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <div className="p-3 md:p-6 rounded-xl bg-zinc-900/50 border border-white/5">
+                      <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-2 md:mb-4 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-purple-400"></span>
                         Quadrant Evolution
                       </h3>
-                      <div className="h-[300px] min-h-[300px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={processedTrajectory}>
+                      <div className="w-full h-80 chart-container-responsive" style={{ width: '100%', height: 320, minHeight: 320, position: 'relative' }}>
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                          <AreaChart data={processedTrajectory} margin={{ top: 5, right: 20, bottom: 60, left: 10 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
                             <XAxis
                               dataKey="date"
                               stroke="#71717a"
                               tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, { month: 'short', year: '2-digit' })}
-                              tick={{ fontSize: 12 }}
+                              tick={{ fontSize: 10, fill: '#71717a' }}
+                              style={{ background: 'none' }}
                             />
                             <YAxis
                               stroke="#71717a"
                               tickFormatter={(val) => `${val.toFixed(0)}%`}
-                              tick={{ fontSize: 12 }}
+                              tick={{ fontSize: 12, fill: '#71717a' }}
+                              style={{ background: 'none' }}
                               domain={[0, 100]}
                             />
                             <RechartsTooltip content={<ChartTooltip />} />
-                            <Legend />
+                            <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px', fontSize: '12px' }} verticalAlign="bottom" />
                             <Area type="monotone" dataKey="quadrantPct.EMPLOYEE" name="Employee" stackId="1" stroke={QUADRANT_COLORS.EMPLOYEE} fill={QUADRANT_COLORS.EMPLOYEE} />
                             <Area type="monotone" dataKey="quadrantPct.SELF_EMPLOYED" name="Self-Employed" stackId="1" stroke={QUADRANT_COLORS.SELF_EMPLOYED} fill={QUADRANT_COLORS.SELF_EMPLOYED} />
                             <Area type="monotone" dataKey="quadrantPct.BUSINESS_OWNER" name="Business Owner" stackId="1" stroke={QUADRANT_COLORS.BUSINESS_OWNER} fill={QUADRANT_COLORS.BUSINESS_OWNER} />

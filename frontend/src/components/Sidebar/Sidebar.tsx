@@ -155,12 +155,26 @@ const Sidebar: React.FC<Props> = ({ onOpenAssistant }) => {
           <span className="sidebar-text"> Saki Assistant </span>
         </button>
 
-        <button className="selection large" onClick={() => navigate('/event-log')}>
+        <button 
+          className="selection large" 
+          onClick={(e) => { 
+            e.stopPropagation(); 
+            handleButtonClick(() => { navigate('/event-log'); setMobileOpen(false); }); 
+          }}
+          disabled={isTouchDevice && !expanded && window.innerWidth > 768}
+        >
           <div className="sidebar-button large"></div>
           <span className="sidebar-text"> View Event Log </span>
         </button> 
         
-        <button className="selection large" onClick={() => { navigate(dynamicPageRoute); setMobileOpen(false); }}> 
+        <button 
+          className="selection large" 
+          onClick={(e) => { 
+            e.stopPropagation(); 
+            handleButtonClick(() => { navigate(dynamicPageRoute); setMobileOpen(false); }); 
+          }}
+          disabled={isTouchDevice && !expanded && window.innerWidth > 768}
+        > 
           <div className="sidebar-button large"></div>
           <span className="sidebar-text"> {dynamicPageLabel} </span>
         </button>
