@@ -101,7 +101,8 @@ const StatCard: React.FC<{
   icon?: React.ReactNode;
   children?: React.ReactNode;
   accentColor?: 'gold' | 'purple' | 'default';
-}> = ({ title, value, subValue, trend, className = '', icon, children, accentColor = 'default' }) => {
+  invertTrendColor?: boolean;
+}> = ({ title, value, subValue, trend, className = '', icon, children, accentColor = 'default', invertTrendColor = false }) => {
   const borderColor = accentColor === 'gold' ? 'group-hover:border-[#FFD700]/30' :
     accentColor === 'purple' ? 'group-hover:border-[#800080]/30' :
       'group-hover:border-white/10';
@@ -119,9 +120,12 @@ const StatCard: React.FC<{
         <div className="mt-auto">
           <div className="text-2xl md:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
             {value}
-            {trend !== undefined && trend !== null && (
-              <span className={`text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1 ${trend >= 0 ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
-                {trend >= 0 ? '▲' : '▼'} {Math.abs(trend)}%
+            {trend !== undefined && trend !== null && Math.abs(trend) > 0 && (
+              <span className={`text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1 ${(invertTrendColor ? trend < 0 : trend >= 0)
+                ? 'bg-green-500/10 text-green-400'
+                : 'bg-red-500/10 text-red-400'
+                }`}>
+                {trend >= 0 ? '▲' : '▼'} {Math.abs(trend).toFixed(1)}%
               </span>
             )}
           </div>
@@ -202,6 +206,15 @@ const Analysis: React.FC = () => {
       fetchSnapshot(selectedDate);
     }
   }, [selectedDate]);
+
+  // Reset comparison state when toggled off
+  useEffect(() => {
+    if (!showCompare) {
+      setCompareResult(null);
+      setCompareStart('');
+      setCompareEnd('');
+    }
+  }, [showCompare]);
 
   const quadrantData = useMemo(() => {
     if (!snapshotData) return [];
@@ -425,14 +438,29 @@ const Analysis: React.FC = () => {
     if (!trajectoryData || trajectoryData.length === 0) return null;
     const first = trajectoryData[0];
     const last = trajectoryData[trajectoryData.length - 1];
+
+    const safeGrowth = (start: number, end: number) => {
+      if (start === 0) return end === 0 ? 0 : (end > 0 ? 100 : -100);
+      return ((end - start) / Math.abs(start)) * 100;
+    };
+
     const freedomGapChange = last.freedomGap - first.freedomGap;
-    const freedomGapTrend = first.freedomGap !== 0 ? (freedomGapChange / Math.abs(first.freedomGap)) * 100 : 0;
+    const freedomGapTrend = safeGrowth(first.freedomGap, last.freedomGap);
+
     const velocityChange = last.wealthVelocity - first.wealthVelocity;
+
     const netWorthChange = last.netWorth - first.netWorth;
-    const netWorthGrowthRate = first.netWorth !== 0 ? (netWorthChange / Math.abs(first.netWorth)) * 100 : 0;
+    const netWorthGrowthRate = safeGrowth(first.netWorth, last.netWorth);
+
     const passiveIncomeChange = last.passiveIncome - first.passiveIncome;
-    const passiveIncomeGrowthRate = first.passiveIncome !== 0 ? (passiveIncomeChange / Math.abs(first.passiveIncome)) * 100 : 0;
+    const passiveIncomeGrowthRate = safeGrowth(first.passiveIncome, last.passiveIncome);
+
     const freedomCrossoverPoint = trajectoryData.find((p, idx) => idx > 0 && p.freedomGap <= 0 && trajectoryData[idx - 1].freedomGap > 0);
+
+    // Calculate recent cashflow trend (last period vs previous period)
+    const prevPoint = trajectoryData.length > 1 ? trajectoryData[trajectoryData.length - 2] : null;
+    const recentCashflowTrend = prevPoint ? safeGrowth(prevPoint.netCashflow, last.netCashflow) : 0;
+
     return {
       startDate: first.date,
       endDate: last.date,
@@ -440,7 +468,8 @@ const Analysis: React.FC = () => {
       freedomGap: { start: first.freedomGap, end: last.freedomGap, change: freedomGapChange, trendPercent: freedomGapTrend, crossoverDate: freedomCrossoverPoint?.date || null },
       wealthVelocity: { start: first.wealthVelocity, end: last.wealthVelocity, change: velocityChange },
       netWorth: { start: first.netWorth, end: last.netWorth, change: netWorthChange, growthRate: netWorthGrowthRate },
-      passiveIncome: { start: first.passiveIncome, end: last.passiveIncome, change: passiveIncomeChange, growthRate: passiveIncomeGrowthRate }
+      passiveIncome: { start: first.passiveIncome, end: last.passiveIncome, change: passiveIncomeChange, growthRate: passiveIncomeGrowthRate },
+      recentCashflowTrend
     };
   }, [trajectoryData]);
 
@@ -466,6 +495,44 @@ const Analysis: React.FC = () => {
   const headerRight = (
     <div className="flex items-center gap-3">
       {timelineController}
+
+      {showCompare && (
+        <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="h-4 w-px bg-white/10 mx-1" />
+          <div className="flex items-center gap-2 bg-zinc-900/80 border border-white/10 rounded-full px-3 py-1.5 backdrop-blur-sm">
+            <span className="text-zinc-500 text-xs font-medium">VS</span>
+            <input
+              type="date"
+              value={compareStart}
+              onChange={(e) => setCompareStart(e.target.value)}
+              className="bg-transparent border-none text-white text-xs focus:ring-0 p-0 w-[85px] [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-calendar-picker-indicator]:hover:opacity-100"
+              placeholder="Start"
+            />
+            <span className="text-zinc-600 text-xs">→</span>
+            <input
+              type="date"
+              value={compareEnd}
+              onChange={(e) => setCompareEnd(e.target.value)}
+              className="bg-transparent border-none text-white text-xs focus:ring-0 p-0 w-[85px] [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-calendar-picker-indicator]:hover:opacity-100"
+              placeholder="End"
+            />
+            {compareStart && compareEnd && (
+              <button
+                onClick={fetchCompareReport}
+                disabled={compareLoading}
+                className="ml-1 w-5 h-5 flex items-center justify-center rounded-full bg-[#9d6dd4] text-white hover:bg-[#9d6dd4]/80 transition-colors disabled:opacity-50"
+              >
+                {compareLoading ? (
+                  <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <button
         onClick={() => setShowCompare(s => !s)}
         aria-pressed={showCompare}
@@ -752,8 +819,8 @@ const Analysis: React.FC = () => {
                         style={{ width: `${Math.min(parseFloat(snapshotData.ratios.passiveCoverageRatio), 100)}%` }}
                       />
                     </div>
-                    <span className={`text-xs font-bold ${snapshotData.financialHealth.freedomDate ? 'text-green-400' : 'text-zinc-600'}`}>
-                      {snapshotData.financialHealth.freedomDate ? 'ON TRACK' : 'NEEDS DATA'}
+                    <span className={`text-xs font-bold ${snapshotData.financialHealth.freedomDate !== 'No Passive Income' ? 'text-green-400' : 'text-zinc-600'}`}>
+                      {snapshotData.financialHealth.freedomDate === 'No Passive Income' ? 'NEEDS DATA' : 'ON TRACK'}
                     </span>
                   </div>
                 </StatCard>
@@ -795,8 +862,12 @@ const Analysis: React.FC = () => {
 
                   <StatCard
                     title="Net Cashflow"
-                    value={formatHistorical(snapshotData.cashflow.netCashflow, snapshotData.currency)}
-                    trend={snapshotData.financialHealth.trends.cashflow}
+                    value={
+                      <span className={snapshotData.cashflow.netCashflow >= 0 ? 'text-green-400' : 'text-red-400'}>
+                        {formatHistorical(snapshotData.cashflow.netCashflow, snapshotData.currency)}
+                      </span>
+                    }
+                    trend={trajectoryMetrics?.recentCashflowTrend ?? snapshotData.financialHealth.trends.cashflow}
                     className="col-span-2 bg-zinc-900/80"
                     accentColor={snapshotData.cashflow.netCashflow >= 0 ? 'gold' : 'default'}
                   >
@@ -811,7 +882,7 @@ const Analysis: React.FC = () => {
                       </div>
                       <div className="my-2 h-px bg-white/5" />
                       <div className="text-xs text-zinc-500">
-                        Savings Rate: <span className="text-white font-bold">{snapshotData.ratios.savingsRate}%</span>
+                        Savings Rate: <span className={`${parseFloat(snapshotData.ratios.savingsRate) >= 0 ? 'text-green-400' : 'text-red-400'} font-bold`}>{snapshotData.ratios.savingsRate}%</span>
                       </div>
                     </div>
                   </StatCard>
@@ -974,30 +1045,32 @@ const Analysis: React.FC = () => {
                       subValue={
                         trajectoryMetrics.freedomGap.crossoverDate
                           ? `Freedom achieved on ${trajectoryMetrics.freedomGap.crossoverDate}`
-                          : `${trajectoryMetrics.freedomGap.trendPercent >= 0 ? '📈' : '📉'} ${Math.abs(trajectoryMetrics.freedomGap.trendPercent).toFixed(1)}% ${trajectoryMetrics.freedomGap.trendPercent >= 0 ? 'increase' : 'decrease'}`
+                          : `${trajectoryMetrics.freedomGap.change > 0 ? 'Gap Widening' : 'Gap Closing'}`
                       }
+                      trend={trajectoryMetrics.freedomGap.trendPercent}
+                      invertTrendColor={true}
                       accentColor="gold"
                     />
 
                     <StatCard
-                      title="Wealth Velocity Lapse"
+                      title="Wealth Velocity Shift"
                       value={`${trajectoryMetrics.wealthVelocity.end.toFixed(2)}%`}
                       subValue={`${trajectoryMetrics.wealthVelocity.change >= 0 ? '+' : ''}${trajectoryMetrics.wealthVelocity.change.toFixed(2)}% change`}
-                      trend={trajectoryMetrics.wealthVelocity.change >= 0 ? 1 : -1}
+                      trend={trajectoryMetrics.wealthVelocity.change}
                     />
 
                     <StatCard
                       title="Net Worth Growth"
                       value={formatCurrencyValue(trajectoryMetrics.netWorth.change, user?.preferredCurrency)}
                       subValue={`${trajectoryMetrics.netWorth.growthRate.toFixed(1)}% growth`}
-                      trend={trajectoryMetrics.netWorth.change >= 0 ? 1 : -1}
+                      trend={trajectoryMetrics.netWorth.growthRate}
                     />
 
                     <StatCard
                       title="Passive Income Growth"
                       value={formatCurrencyValue(trajectoryMetrics.passiveIncome.change, user?.preferredCurrency)}
                       subValue={`${trajectoryMetrics.passiveIncome.growthRate.toFixed(1)}% increase`}
-                      trend={trajectoryMetrics.passiveIncome.change >= 0 ? 1 : -1}
+                      trend={trajectoryMetrics.passiveIncome.growthRate}
                       accentColor="purple"
                     />
                   </div>
@@ -1045,8 +1118,7 @@ const Analysis: React.FC = () => {
                             <Legend />
                             <Line type="monotone" dataKey="totalExpenses" name="Expenses" stroke="#f87171" strokeWidth={2} dot={false} />
                             <Line type="monotone" dataKey="passiveIncome" name="Passive Income" stroke="#4ade80" strokeWidth={2} dot={false} />
-                            <Area type="monotone" dataKey="gapArea" name="Freedom Gap" stroke="none" fill="url(#colorExpenses)" />
-                            <Area type="monotone" dataKey="surplusArea" name="Freedom Achieved" stroke="none" fill="url(#colorSurplus)" />
+
 
                             {/* Crossover Point */}
                             {processedTrajectory.map((p, idx) => {
