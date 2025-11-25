@@ -15,12 +15,12 @@ const TEST_USER = {
   password: 'TimeMachine2024!',
   isAdmin: false,
   preferredCurrencyId: 1, // USD
-  createdAt: new Date('2024-01-01T10:00:00Z'),
+  createdAt: new Date('2020-01-01T10:00:00Z'),
 };
 
 async function main() {
   console.log('🕐 Starting Time Machine Test User Seed...');
-  console.log('📅 Date Range: January 1, 2024 → November 21, 2025\n');
+  console.log('📅 Date Range: January 1, 2020 → November 21, 2025\n');
 
   // Hash password
   const hashedPassword = await hashPassword(TEST_USER.password);
@@ -33,7 +33,7 @@ async function main() {
       }
     }
   });
-  
+
   await prisma.user.deleteMany({
     where: { email: TEST_USER.email }
   });
@@ -83,7 +83,7 @@ async function main() {
   // Log initial creation events
   await prisma.event.create({
     data: {
-      timestamp: new Date('2024-01-01T10:00:00Z'),
+      timestamp: new Date('2020-01-01T10:00:00Z'),
       actionType: 'CREATE',
       entityType: 'INCOME',
       entitySubtype: 'INCOME_STATEMENT',
@@ -96,7 +96,7 @@ async function main() {
 
   await prisma.event.create({
     data: {
-      timestamp: new Date('2024-01-01T10:00:00Z'),
+      timestamp: new Date('2020-01-01T10:00:00Z'),
       actionType: 'CREATE',
       entityType: 'CASH_SAVINGS',
       entitySubtype: null,
@@ -110,15 +110,15 @@ async function main() {
   console.log('✅ Created initial financial records (IncomeStatement, CashSavings, BalanceSheet)\n');
 
   // ==========================================
-  // JANUARY 2024 - Starting Job
+  // JANUARY 2020 - Early Career
   // ==========================================
-  console.log('📆 JANUARY 2024 - Starting Career');
+  console.log('📆 JANUARY 2020 - Early Career (Junior Developer)');
 
-  // Initial salary
+  // Initial salary (Junior)
   const salary1 = await prisma.incomeLine.create({
     data: {
-      name: 'Software Engineer Salary',
-      amount: 4500,
+      name: 'Junior Developer Salary',
+      amount: 3200,
       type: 'EARNED',
       quadrant: 'EMPLOYEE',
       isId: incomeStatement.id,
@@ -127,12 +127,12 @@ async function main() {
 
   await prisma.event.create({
     data: {
-      timestamp: new Date('2024-01-05T09:00:00Z'),
+      timestamp: new Date('2020-01-05T09:00:00Z'),
       actionType: 'CREATE',
       entityType: 'INCOME',
       entitySubtype: 'EARNED',
       beforeValue: null,
-      afterValue: JSON.stringify({ name: salary1.name, amount: 4500, type: 'EARNED', quadrant: 'EMPLOYEE' }),
+      afterValue: JSON.stringify({ name: salary1.name, amount: 3200, type: 'EARNED', quadrant: 'EMPLOYEE' }),
       userId: user.id,
       entityId: salary1.id,
     },
@@ -142,18 +142,18 @@ async function main() {
   const rent1 = await prisma.expense.create({
     data: {
       name: 'Apartment Rent',
-      amount: 1200,
+      amount: 1000,
       isId: incomeStatement.id,
     },
   });
 
   await prisma.event.create({
     data: {
-      timestamp: new Date('2024-01-10T14:00:00Z'),
+      timestamp: new Date('2020-01-10T14:00:00Z'),
       actionType: 'CREATE',
       entityType: 'EXPENSE',
       beforeValue: null,
-      afterValue: JSON.stringify({ name: rent1.name, amount: 1200 }),
+      afterValue: JSON.stringify({ name: rent1.name, amount: 1000 }),
       userId: user.id,
       entityId: rent1.id,
     },
@@ -162,18 +162,18 @@ async function main() {
   const utilities = await prisma.expense.create({
     data: {
       name: 'Utilities',
-      amount: 150,
+      amount: 120,
       isId: incomeStatement.id,
     },
   });
 
   await prisma.event.create({
     data: {
-      timestamp: new Date('2024-01-10T14:30:00Z'),
+      timestamp: new Date('2020-01-10T14:30:00Z'),
       actionType: 'CREATE',
       entityType: 'EXPENSE',
       beforeValue: null,
-      afterValue: JSON.stringify({ name: utilities.name, amount: 150 }),
+      afterValue: JSON.stringify({ name: utilities.name, amount: 120 }),
       userId: user.id,
       entityId: utilities.id,
     },
@@ -182,17 +182,215 @@ async function main() {
   const groceries = await prisma.expense.create({
     data: {
       name: 'Groceries',
-      amount: 400,
+      amount: 300,
       isId: incomeStatement.id,
     },
   });
 
   await prisma.event.create({
     data: {
-      timestamp: new Date('2024-01-15T16:00:00Z'),
+      timestamp: new Date('2020-01-15T16:00:00Z'),
       actionType: 'CREATE',
       entityType: 'EXPENSE',
       beforeValue: null,
+      afterValue: JSON.stringify({ name: groceries.name, amount: 300 }),
+      userId: user.id,
+      entityId: groceries.id,
+    },
+  });
+
+  console.log('   ✅ Income: $3,200/month (Junior Dev)');
+  console.log('   ✅ Expenses: $1,420/month\n');
+
+  // ==========================================
+  // 2021-2023 - Career Growth
+  // ==========================================
+  console.log('📆 2021-2023 - Career Growth & Raises');
+
+  // Jan 2021 Raise
+  await prisma.incomeLine.update({
+    where: { id: salary1.id },
+    data: { amount: 3500 },
+  });
+
+  await prisma.event.create({
+    data: {
+      timestamp: new Date('2021-01-01T09:00:00Z'),
+      actionType: 'UPDATE',
+      entityType: 'INCOME',
+      entitySubtype: 'EARNED',
+      beforeValue: JSON.stringify({ name: 'Junior Developer Salary', amount: 3200, type: 'EARNED', quadrant: 'EMPLOYEE' }),
+      afterValue: JSON.stringify({ name: 'Junior Developer Salary', amount: 3500, type: 'EARNED', quadrant: 'EMPLOYEE' }),
+      userId: user.id,
+      entityId: salary1.id,
+    },
+  });
+
+  // Jan 2021 Savings
+  await prisma.cashSavings.update({
+    where: { id: cashSavings.id },
+    data: { amount: 1000 },
+  });
+
+  await prisma.event.create({
+    data: {
+      timestamp: new Date('2021-01-15T09:00:00Z'),
+      actionType: 'UPDATE',
+      entityType: 'CASH_SAVINGS',
+      beforeValue: JSON.stringify({ id: cashSavings.id, amount: 0 }),
+      afterValue: JSON.stringify({ id: cashSavings.id, amount: 1000 }),
+      userId: user.id,
+      entityId: cashSavings.id,
+    },
+  });
+
+  // Jan 2022 Raise
+  await prisma.incomeLine.update({
+    where: { id: salary1.id },
+    data: { amount: 3800 },
+  });
+
+  await prisma.event.create({
+    data: {
+      timestamp: new Date('2022-01-01T09:00:00Z'),
+      actionType: 'UPDATE',
+      entityType: 'INCOME',
+      entitySubtype: 'EARNED',
+      beforeValue: JSON.stringify({ name: 'Junior Developer Salary', amount: 3500, type: 'EARNED', quadrant: 'EMPLOYEE' }),
+      afterValue: JSON.stringify({ name: 'Junior Developer Salary', amount: 3800, type: 'EARNED', quadrant: 'EMPLOYEE' }),
+      userId: user.id,
+      entityId: salary1.id,
+    },
+  });
+
+  // Jan 2022 Savings
+  await prisma.cashSavings.update({
+    where: { id: cashSavings.id },
+    data: { amount: 2000 },
+  });
+
+  await prisma.event.create({
+    data: {
+      timestamp: new Date('2022-01-15T09:00:00Z'),
+      actionType: 'UPDATE',
+      entityType: 'CASH_SAVINGS',
+      beforeValue: JSON.stringify({ id: cashSavings.id, amount: 1000 }),
+      afterValue: JSON.stringify({ id: cashSavings.id, amount: 2000 }),
+      userId: user.id,
+      entityId: cashSavings.id,
+    },
+  });
+
+  // Jan 2023 Raise
+  await prisma.incomeLine.update({
+    where: { id: salary1.id },
+    data: { amount: 4200 },
+  });
+
+  await prisma.event.create({
+    data: {
+      timestamp: new Date('2023-01-01T09:00:00Z'),
+      actionType: 'UPDATE',
+      entityType: 'INCOME',
+      entitySubtype: 'EARNED',
+      beforeValue: JSON.stringify({ name: 'Junior Developer Salary', amount: 3800, type: 'EARNED', quadrant: 'EMPLOYEE' }),
+      afterValue: JSON.stringify({ name: 'Junior Developer Salary', amount: 4200, type: 'EARNED', quadrant: 'EMPLOYEE' }),
+      userId: user.id,
+      entityId: salary1.id,
+    },
+  });
+
+  // Jan 2023 Savings
+  await prisma.cashSavings.update({
+    where: { id: cashSavings.id },
+    data: { amount: 2500 },
+  });
+
+  await prisma.event.create({
+    data: {
+      timestamp: new Date('2023-01-15T09:00:00Z'),
+      actionType: 'UPDATE',
+      entityType: 'CASH_SAVINGS',
+      beforeValue: JSON.stringify({ id: cashSavings.id, amount: 2000 }),
+      afterValue: JSON.stringify({ id: cashSavings.id, amount: 2500 }),
+      userId: user.id,
+      entityId: cashSavings.id,
+    },
+  });
+
+  console.log('   ✅ 2021-2023: Salary grew $3,200 → $4,200');
+  console.log('   ✅ Savings accumulated: $2,500\n');
+
+  // ==========================================
+  // JANUARY 2024 - Promotion to Senior
+  // ==========================================
+  console.log('📆 JANUARY 2024 - Promotion to Software Engineer');
+
+  // Update salary to match original story start
+  await prisma.incomeLine.update({
+    where: { id: salary1.id },
+    data: { name: 'Software Engineer Salary', amount: 4500 },
+  });
+
+  await prisma.event.create({
+    data: {
+      timestamp: new Date('2024-01-05T09:00:00Z'),
+      actionType: 'UPDATE',
+      entityType: 'INCOME',
+      entitySubtype: 'EARNED',
+      beforeValue: JSON.stringify({ name: 'Junior Developer Salary', amount: 4200, type: 'EARNED', quadrant: 'EMPLOYEE' }),
+      afterValue: JSON.stringify({ name: 'Software Engineer Salary', amount: 4500, type: 'EARNED', quadrant: 'EMPLOYEE' }),
+      userId: user.id,
+      entityId: salary1.id,
+    },
+  });
+
+  // Update expenses to match original story
+  await prisma.expense.update({
+    where: { id: rent1.id },
+    data: { amount: 1200 },
+  });
+
+  await prisma.event.create({
+    data: {
+      timestamp: new Date('2024-01-10T14:00:00Z'),
+      actionType: 'UPDATE',
+      entityType: 'EXPENSE',
+      beforeValue: JSON.stringify({ name: rent1.name, amount: 1000 }),
+      afterValue: JSON.stringify({ name: rent1.name, amount: 1200 }),
+      userId: user.id,
+      entityId: rent1.id,
+    },
+  });
+
+  await prisma.expense.update({
+    where: { id: utilities.id },
+    data: { amount: 150 },
+  });
+
+  await prisma.event.create({
+    data: {
+      timestamp: new Date('2024-01-10T14:30:00Z'),
+      actionType: 'UPDATE',
+      entityType: 'EXPENSE',
+      beforeValue: JSON.stringify({ name: utilities.name, amount: 120 }),
+      afterValue: JSON.stringify({ name: utilities.name, amount: 150 }),
+      userId: user.id,
+      entityId: utilities.id,
+    },
+  });
+
+  await prisma.expense.update({
+    where: { id: groceries.id },
+    data: { amount: 400 },
+  });
+
+  await prisma.event.create({
+    data: {
+      timestamp: new Date('2024-01-15T16:00:00Z'),
+      actionType: 'UPDATE',
+      entityType: 'EXPENSE',
+      beforeValue: JSON.stringify({ name: groceries.name, amount: 300 }),
       afterValue: JSON.stringify({ name: groceries.name, amount: 400 }),
       userId: user.id,
       entityId: groceries.id,
@@ -217,7 +415,7 @@ async function main() {
       timestamp: new Date('2024-03-01T10:00:00Z'),
       actionType: 'UPDATE',
       entityType: 'CASH_SAVINGS',
-      beforeValue: JSON.stringify({ id: cashSavings.id, amount: 0 }),
+      beforeValue: JSON.stringify({ id: cashSavings.id, amount: 2500 }),
       afterValue: JSON.stringify({ id: cashSavings.id, amount: 3000 }),
       userId: user.id,
       entityId: cashSavings.id,
@@ -732,7 +930,9 @@ async function main() {
   console.log(`   Password: ${TEST_USER.password}\n`);
 
   console.log('📅 TEST DATES TO TRY:');
-  console.log('   • 2024-01-01 - Account creation (empty state)');
+  console.log('   • 2020-01-01 - Account creation (Early Career)');
+  console.log('   • 2021-01-15 - First raise & savings');
+  console.log('   • 2024-01-05 - Promotion to Senior');
   console.log('   • 2024-03-15 - First car purchase');
   console.log('   • 2024-06-01 - After salary raise');
   console.log('   • 2024-10-15 - Started investing');
