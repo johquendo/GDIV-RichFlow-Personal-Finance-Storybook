@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } from 'react';
+import Sidebar from '../../components/Sidebar/Sidebar';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header/Header';
 import { useAuth } from '../../context/AuthContext';
@@ -138,7 +139,10 @@ const Analysis: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [slowSnapshot, setSlowSnapshot] = useState(false);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
+  const deferredSelectedDate = useDeferredValue(selectedDate);
   const [snapshotData, setSnapshotData] = useState<SnapshotData | null>(null);
 
   // Compare state
@@ -146,6 +150,8 @@ const Analysis: React.FC = () => {
   const [compareStart, setCompareStart] = useState('');
   const [compareEnd, setCompareEnd] = useState('');
   const [compareLoading, setCompareLoading] = useState(false);
+  const [slowCompare, setSlowCompare] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
   const [compareResult, setCompareResult] = useState<{ start: SnapshotData; end: SnapshotData } | null>(null);
 
   // Trajectory state for velocity and freedom gap visualization
@@ -153,7 +159,26 @@ const Analysis: React.FC = () => {
   const [trajectoryEnd, setTrajectoryEnd] = useState('');
   const [trajectoryInterval, setTrajectoryInterval] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
   const [trajectoryLoading, setTrajectoryLoading] = useState(false);
+  const [slowTrajectory, setSlowTrajectory] = useState(false);
+  const [trajectoryError, setTrajectoryError] = useState<string | null>(null);
   const [trajectoryData, setTrajectoryData] = useState<TrajectoryPoint[]>([]);
+
+  // Abort controllers
+  // Request id tracking for cancellation emulation
+  const snapshotReqIdRef = useRef(0);
+  const compareReqIdRef = useRef(0);
+  const trajectoryReqIdRef = useRef(0);
+
+  // Performance constants
+  const SLOW_THRESHOLD_MS = 200;
+  const MAX_TRAJECTORY_POINTS = 1500;
+
+  const formatError = (err: unknown): string => {
+    if (!err) return 'Unknown error';
+    if (typeof err === 'string') return err;
+    if (err instanceof Error) return err.message || 'Unexpected error';
+    try { return JSON.stringify(err); } catch { return 'Unexpected error'; }
+  };
 
   // Mini calendar refs and opener
   const startRef = React.useRef<HTMLInputElement>(null);
@@ -183,15 +208,24 @@ const Analysis: React.FC = () => {
   );
 
   const fetchSnapshot = async (date?: string) => {
+    const reqId = ++snapshotReqIdRef.current;
+    setSnapshotError(null);
+    setLoading(true);
+    setSlowSnapshot(false);
+    const startTs = performance.now();
+    const slowTimer = setTimeout(() => setSlowSnapshot(true), SLOW_THRESHOLD_MS);
     try {
-      setLoading(true);
       const data = await analysisAPI.getFinancialSnapshot(date);
+      if (reqId !== snapshotReqIdRef.current) return; // stale
       setSnapshotData(data);
       if (!date) setSelectedDate('');
     } catch (error) {
       console.error('Failed to fetch snapshot:', error);
+      setSnapshotError(formatError(error));
     } finally {
+      clearTimeout(slowTimer);
       setLoading(false);
+      setSlowSnapshot(performance.now() - startTs > SLOW_THRESHOLD_MS);
     }
   };
 
@@ -200,10 +234,10 @@ const Analysis: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (selectedDate) {
-      fetchSnapshot(selectedDate);
+    if (deferredSelectedDate) {
+      fetchSnapshot(deferredSelectedDate);
     }
-  }, [selectedDate]);
+  }, [deferredSelectedDate]);
 
   const quadrantData = useMemo(() => {
     if (!snapshotData) return [];
@@ -232,23 +266,70 @@ const Analysis: React.FC = () => {
 
   const fetchCompareReport = async () => {
     if (!compareStart || !compareEnd) return;
+    const reqId = ++compareReqIdRef.current;
+    setCompareError(null);
     setCompareLoading(true);
+    setSlowCompare(false);
+    const slowTimer = setTimeout(() => setSlowCompare(true), SLOW_THRESHOLD_MS);
     try {
       const [startSnap, endSnap] = await Promise.all([
         analysisAPI.getFinancialSnapshot(compareStart),
         analysisAPI.getFinancialSnapshot(compareEnd),
       ]);
+      if (reqId !== compareReqIdRef.current) return; // stale
       setCompareResult({ start: startSnap, end: endSnap });
     } catch (e) {
       console.error('Failed to fetch comparison report:', e);
+      setCompareError(formatError(e));
     } finally {
+      clearTimeout(slowTimer);
       setCompareLoading(false);
     }
   };
 
+  // Downsampling (simple bucket average)
+  const downsample = useCallback((data: TrajectoryPoint[], max: number): TrajectoryPoint[] => {
+    if (data.length <= max) return data;
+    const bucketSize = data.length / max;
+    const result: TrajectoryPoint[] = [];
+    for (let i = 0; i < max; i++) {
+      const start = Math.floor(i * bucketSize);
+      const end = Math.min(Math.floor((i + 1) * bucketSize), data.length);
+      const slice = data.slice(start, end);
+      if (!slice.length) continue;
+      const mid = slice[Math.floor(slice.length / 2)];
+      const sum = (key: keyof TrajectoryPoint) => slice.reduce((acc, p) => acc + (p[key] as number), 0);
+      result.push({
+        date: mid.date,
+        netWorth: sum('netWorth') / slice.length,
+        netWorthDelta: sum('netWorthDelta') / slice.length,
+        passiveIncome: sum('passiveIncome') / slice.length,
+        portfolioIncome: sum('portfolioIncome') / slice.length,
+        totalExpenses: sum('totalExpenses') / slice.length,
+        freedomGap: sum('freedomGap') / slice.length,
+        wealthVelocity: sum('wealthVelocity') / slice.length,
+        assetEfficiency: sum('assetEfficiency') / slice.length,
+        netCashflow: sum('netCashflow') / slice.length,
+        totalIncome: sum('totalIncome') / slice.length,
+        incomeQuadrant: {
+          EMPLOYEE: slice.reduce((a, p) => a + p.incomeQuadrant.EMPLOYEE, 0) / slice.length,
+          SELF_EMPLOYED: slice.reduce((a, p) => a + p.incomeQuadrant.SELF_EMPLOYED, 0) / slice.length,
+          BUSINESS_OWNER: slice.reduce((a, p) => a + p.incomeQuadrant.BUSINESS_OWNER, 0) / slice.length,
+          INVESTOR: slice.reduce((a, p) => a + p.incomeQuadrant.INVESTOR, 0) / slice.length,
+        },
+        currency: mid.currency
+      });
+    }
+    return result;
+  }, []);
+
   const fetchTrajectoryData = async () => {
     if (!trajectoryStart || !trajectoryEnd) return;
+    const reqId = ++trajectoryReqIdRef.current;
+    setTrajectoryError(null);
     setTrajectoryLoading(true);
+    setSlowTrajectory(false);
+    const slowTimer = setTimeout(() => setSlowTrajectory(true), SLOW_THRESHOLD_MS);
     try {
       const data = await analysisAPI.getFinancialTrajectory(
         trajectoryStart,
@@ -261,6 +342,7 @@ const Analysis: React.FC = () => {
       console.error('Failed to fetch trajectory data:', e);
       setTrajectoryData([]);
     } finally {
+      clearTimeout(slowTimer);
       setTrajectoryLoading(false);
     }
   };
@@ -522,7 +604,11 @@ const Analysis: React.FC = () => {
   if (loading && !snapshotData) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-black text-white">
-        <div className="animate-pulse text-[#FFD700]">Loading Financial Data...</div>
+        <div className="flex flex-col items-center gap-2">
+          <div className="animate-pulse text-[#FFD700] text-sm">Loading Financial Data...</div>
+          {slowSnapshot && <div className="text-xs text-zinc-500">Fetching snapshot…</div>}
+          {snapshotError && <div className="text-xs text-red-400">{snapshotError}</div>}
+        </div>
       </div>
     );
   }
@@ -536,14 +622,123 @@ const Analysis: React.FC = () => {
           <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-[#800080]/20 rounded-full blur-[120px] pointer-events-none" />
           <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-[#FFD700]/10 rounded-full blur-[120px] pointer-events-none" />
           <main className="flex-1 overflow-y-auto p-6 md:p-8 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-            <div className="max-w-7xl mx-auto mb-4">
-              <button
-                className="analysis-back-btn"
-                onClick={() => navigate('/dashboard')}
-              >
-                Back to Dashboard
-              </button>
-            </div>
+            {(snapshotError || compareError || trajectoryError) && (
+              <div className="max-w-7xl mx-auto mb-4 space-y-2">
+                {snapshotError && (
+                  <div className="rounded-lg border border-red-600/30 bg-red-950/40 px-4 py-2 text-xs text-red-300 flex justify-between">
+                    <span>Snapshot Error: {snapshotError}</span>
+                    <button onClick={() => setSnapshotError(null)} className="text-red-400 hover:text-red-300">Dismiss</button>
+                  </div>
+                )}
+                {compareError && (
+                  <div className="rounded-lg border border-red-600/30 bg-red-950/40 px-4 py-2 text-xs text-red-300 flex justify-between">
+                    <span>Compare Error: {compareError}</span>
+                    <button onClick={() => setCompareError(null)} className="text-red-400 hover:text-red-300">Dismiss</button>
+                  </div>
+                )}
+                {trajectoryError && (
+                  <div className="rounded-lg border border-red-600/30 bg-red-950/40 px-4 py-2 text-xs text-red-300 flex justify-between">
+                    <span>Trajectory Error: {trajectoryError}</span>
+                    <button onClick={() => setTrajectoryError(null)} className="text-red-400 hover:text-red-300">Dismiss</button>
+                  </div>
+                )}
+              </div>
+            )}
+            {(slowCompare && compareLoading) && (
+              <div className="fixed top-20 right-4 z-50 rounded-full bg-zinc-900/80 border border-[#9d6dd4]/40 px-3 py-1 text-[10px] text-[#9d6dd4] shadow-lg">Generating comparison…</div>
+            )}
+            {(slowTrajectory && trajectoryLoading) && (
+              <div className="fixed top-32 right-4 z-50 rounded-full bg-zinc-900/80 border border-[#FFD700]/40 px-3 py-1 text-[10px] text-[#FFD700] shadow-lg">Updating trajectory…</div>
+            )}
+            {showCompare && (
+              <div className="max-w-7xl mx-auto mb-6 rounded-2xl bg-zinc-900/70 border border-white/5 p-4 md:p-6">
+                <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+                  <h2 className="text-sm md:text-base font-semibold text-white">Compare Two Dates</h2>
+                  {compareResult && (
+                    <button
+                      onClick={() => setCompareResult(null)}
+                      className="text-xs px-3 py-1.5 rounded-full border border-white/10 text-zinc-300 hover:text-white hover:bg-zinc-800"
+                    >Clear Report</button>
+                  )}
+                </div>
+
+                <div className="flex flex-col md:flex-row items-center gap-4">
+                  {/* Start Date */}
+                  <div className="flex items-center gap-2 w-full md:w-auto">
+                    <span className="text-xs uppercase tracking-wider text-zinc-400">Start</span>
+                    <div className="relative flex-1 md:flex-none">
+                      <input
+                        ref={startRef}
+                        type="date"
+                        value={compareStart}
+                        onChange={(e) => setCompareStart(e.target.value)}
+                        max={compareEnd || new Date().toISOString().split('T')[0]}
+                        className="bg-zinc-900/60 border border-white/10 text-white text-sm rounded-lg px-3 py-2 w-full md:w-48 focus:outline-none focus:ring-1 focus:ring-[#9d6dd4] cursor-pointer [&::-webkit-calendar-picker-indicator]:invert"
+                      />
+                    </div>
+                    <button
+                      onClick={() => openNativePicker(startRef.current)}
+                      className="text-xs px-2 py-1 rounded-md border border-white/10 text-zinc-300 hover:bg-zinc-800"
+                      title="Open calendar"
+                    >Pick</button>
+                  </div>
+
+                  <div className="text-zinc-600">→</div>
+
+                  {/* End Date */}
+                  <div className="flex items-center gap-2 w-full md:w-auto">
+                    <span className="text-xs uppercase tracking-wider text-zinc-400">End</span>
+                    <div className="relative flex-1 md:flex-none">
+                      <input
+                        ref={endRef}
+                        type="date"
+                        value={compareEnd}
+                        onChange={(e) => setCompareEnd(e.target.value)}
+                        min={compareStart || undefined}
+                        max={new Date().toISOString().split('T')[0]}
+                        className="bg-zinc-900/60 border border-white/10 text-white text-sm rounded-lg px-3 py-2 w-full md:w-48 focus:outline-none focus:ring-1 focus:ring-[#9d6dd4] cursor-pointer [&::-webkit-calendar-picker-indicator]:invert"
+                      />
+                    </div>
+                    <button
+                      onClick={() => openNativePicker(endRef.current)}
+                      className="text-xs px-2 py-1 rounded-md border border-white/10 text-zinc-300 hover:bg-zinc-800"
+                      title="Open calendar"
+                    >Pick</button>
+                  </div>
+
+                  {/* Swap */}
+                  <button
+                    onClick={() => {
+                      if (!compareStart || !compareEnd) return;
+                      setCompareStart(compareEnd);
+                      setCompareEnd(compareStart);
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-full border border-white/10 text-zinc-300 hover:text-white hover:bg-zinc-800"
+                    title="Swap dates"
+                  >Swap</button>
+
+                  {/* Generate Button */}
+                  {(() => {
+                    const startOk = !!compareStart;
+                    const endOk = !!compareEnd;
+                    const rangeOk = startOk && endOk && safeDate(compareStart) <= safeDate(compareEnd);
+                    return (
+                      <button
+                        onClick={fetchCompareReport}
+                        disabled={!rangeOk || compareLoading}
+                        className={`ml-auto md:ml-0 px-4 py-2 rounded-full text-sm transition-all ${rangeOk && !compareLoading
+                          ? 'bg-[#9d6dd4]/20 text-white border border-[#9d6dd4]/40 hover:bg-[#9d6dd4]/30 shadow-[0_0_0_2px_rgba(157,109,212,0.25),0_0_18px_rgba(157,109,212,0.55)]'
+                          : 'bg-zinc-900/60 text-zinc-500 border border-white/10 cursor-not-allowed'
+                        }`}
+                        title={rangeOk ? 'Generate comparison report' : 'Pick valid start and end dates'}
+                      >
+                        {compareLoading ? 'Generating…' : 'Generate Report'}
+                      </button>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
             {compareMetrics && (
               <div className="max-w-7xl mx-auto mb-6 rounded-2xl bg-zinc-900/60 border border-white/5 p-6">
                 <div className="flex items-center justify-between mb-4">
