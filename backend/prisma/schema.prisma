@@ -8,20 +8,22 @@ datasource db {
 }
 
 model User {
-  id                  Int              @id @default(autoincrement())
-  name                String           @unique
-  email               String           @unique
+  id                  Int                 @id @default(autoincrement())
+  name                String              @unique
+  email               String              @unique
   password            String
-  isAdmin             Boolean          @default(false)
-  preferredCurrencyId Int              @default(1)
-  createdAt           DateTime         @default(now())
+  isAdmin             Boolean             @default(false)
+  preferredCurrencyId Int                 @default(1)
+  createdAt           DateTime            @default(now())
   updatedAt           DateTime
   lastLogin           DateTime?
   BalanceSheet        BalanceSheet?
   CashSavings         CashSavings?
+  Event               Event[]
   IncomeStatement     IncomeStatement?
   Session             Session[]
-  PreferredCurrency   Currency         @relation(fields: [preferredCurrencyId], references: [id])
+  PreferredCurrency   Currency            @relation(fields: [preferredCurrencyId], references: [id])
+  financialSnapshots  FinancialSnapshot[]
 }
 
 model Session {
@@ -72,6 +74,7 @@ model IncomeLine {
   amount          Float
   type            String
   isId            Int
+  quadrant        String?
   IncomeStatement IncomeStatement @relation(fields: [isId], references: [id], onDelete: Cascade)
 }
 
@@ -91,8 +94,37 @@ model CashSavings {
 }
 
 model Currency {
-  id        Int    @id @default(autoincrement())
+  id         Int    @id @default(autoincrement())
   cur_symbol String
-  cur_name  String
-  User      User[]
+  cur_name   String
+  User       User[]
+}
+
+model Event {
+  id            Int      @id @default(autoincrement())
+  timestamp     DateTime @default(now())
+  actionType    String
+  entityType    String
+  entitySubtype String?
+  beforeValue   Json?
+  afterValue    Json?
+  userId        Int
+  entityId      Int
+  User          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([userId, timestamp])
+}
+
+model FinancialSnapshot {
+  id        String   @id @default(uuid())
+  userId    Int
+  date      DateTime
+  data      Json
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
 }

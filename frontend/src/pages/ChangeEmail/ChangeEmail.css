@@ -22,7 +22,7 @@
 .change-email-card h2 {
   margin: 0 0 1.5rem 0;
   color: #EDCA69;
-  font-size: 2rem;
+  font-size: clamp(1.5rem, 3vw + 0.5rem, 2rem);
   font-weight: bold;
   border-bottom: 2px solid #EDCA69;
   padding-bottom: 0.75rem;
@@ -78,6 +78,7 @@
   margin-top: 0.5rem;
   transition: all 0.3s ease;
   font-size: 1rem;
+  min-height: 44px;
 }
 
 .change-email-form input:focus {
@@ -99,6 +100,7 @@
   transition: all 0.3s ease;
   font-size: 1.05rem;
   margin-top: 0.5rem;
+  min-height: 44px;
 }
 
 .change-email-form button:hover {
@@ -156,10 +158,6 @@
     padding: 1.5rem;
   }
 
-  .change-email-card h2 {
-    font-size: 1.5rem;
-  }
-
   .change-email-form {
     grid-template-columns: 1fr;
     gap: 1rem;
@@ -167,5 +165,29 @@
 
   .change-email-form button {
     padding: 0.75rem 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .change-email-page {
+    padding: 0.75rem;
+  }
+
+  .change-email-card {
+    padding: 1rem;
+  }
+
+  .change-email-back-button {
+    width: 100%;
+    text-align: center;
+  }
+
+  .change-email-form {
+    gap: 0.875rem;
+  }
+
+  .change-email-form input,
+  .change-email-form button {
+    font-size: 1rem;
   }
 }
