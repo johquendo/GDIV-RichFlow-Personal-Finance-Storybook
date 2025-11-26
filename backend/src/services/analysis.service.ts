@@ -287,26 +287,33 @@ function calculateFinancialHealth(
   }
 
   // 4. Freedom Date
+  // Note: Combined passive + portfolio income is used for financial freedom calculations
+  // since portfolio income (from investments) also generates money without active work
+  const currentCombinedPassiveIncome = currentPassiveIncome + currentPortfolioIncome;
   let freedomDate: string | null = null;
 
-  if (currentPassiveIncome >= currentExpenses) {
+  if (currentCombinedPassiveIncome >= currentExpenses) {
     freedomDate = "Achieved";
-  } else if (currentPassiveIncome > 0) {
-    // We have some passive income, let's try to project
+  } else if (currentCombinedPassiveIncome > 0) {
+    // We have some passive/portfolio income, let's try to project
     if (sixMonthAgoState) {
       const sixMonthPassive = Array.from(sixMonthAgoState.incomeLines.values())
         .filter(i => i.type.toUpperCase() === 'PASSIVE')
         .reduce((sum, i) => sum + i.amount, 0);
+      const sixMonthPortfolio = Array.from(sixMonthAgoState.incomeLines.values())
+        .filter(i => i.type.toUpperCase() === 'PORTFOLIO')
+        .reduce((sum, i) => sum + i.amount, 0);
+      const sixMonthCombinedPassive = sixMonthPassive + sixMonthPortfolio;
 
       // Case 1: Growth from non-zero base (Compound Growth)
-      if (sixMonthPassive > 0) {
-        if (currentPassiveIncome > sixMonthPassive) {
+      if (sixMonthCombinedPassive > 0) {
+        if (currentCombinedPassiveIncome > sixMonthCombinedPassive) {
           // Calculate monthly growth rate (CAGR over 6 months)
-          const growthFactor = Math.pow(currentPassiveIncome / sixMonthPassive, 1 / 6);
+          const growthFactor = Math.pow(currentCombinedPassiveIncome / sixMonthCombinedPassive, 1 / 6);
           const r = growthFactor - 1;
 
           if (r > 0) {
-            const monthsToFreedom = Math.log(currentExpenses / currentPassiveIncome) / Math.log(1 + r);
+            const monthsToFreedom = Math.log(currentExpenses / currentCombinedPassiveIncome) / Math.log(1 + r);
 
             if (monthsToFreedom > 0 && monthsToFreedom < 600) { // Cap at 50 years
               const freedom = new Date();
@@ -324,8 +331,8 @@ function calculateFinancialHealth(
       else {
         // Assume linear growth over the last 6 months
         // Average monthly addition = current / 6
-        const monthlyGrowthAmount = currentPassiveIncome / 6;
-        const gapToCover = currentExpenses - currentPassiveIncome;
+        const monthlyGrowthAmount = currentCombinedPassiveIncome / 6;
+        const gapToCover = currentExpenses - currentCombinedPassiveIncome;
 
         if (monthlyGrowthAmount > 0) {
           const monthsToFreedom = gapToCover / monthlyGrowthAmount;
@@ -389,8 +396,13 @@ function calculateSnapshotFromState(
   const totalExpenses = Array.from(state.expenses.values()).reduce((sum, expense) => sum + expense.amount, 0);
   const netCashflow = totalIncome - totalExpenses;
 
+  // Combined passive income (passive + portfolio) for freedom calculations
+  // Portfolio income from investments also generates money without active work
+  const combinedPassiveIncome = passiveIncome + portfolioIncome;
+
   // Calculate ratios
-  const passiveCoverageRatio = totalExpenses > 0 ? (passiveIncome / totalExpenses) * 100 : 0;
+  // Passive coverage now includes portfolio income since it also contributes to financial freedom
+  const passiveCoverageRatio = totalExpenses > 0 ? (combinedPassiveIncome / totalExpenses) * 100 : 0;
   const savingsRate = totalIncome > 0 ? (netCashflow / totalIncome) * 100 : 0;
 
   // --- RichFlow Metrics ---
@@ -418,8 +430,9 @@ function calculateSnapshotFromState(
   const totalAssetsWithCash = totalAssets + totalCashBalance;
   const solvencyRatio = totalAssetsWithCash > 0 ? (totalLiabilities / totalAssetsWithCash) * 100 : 0;
 
-  // 3. Freedom Gap (Expenses - Passive Income)
-  const freedomGap = totalExpenses - passiveIncome;
+  // 3. Freedom Gap (Expenses - Combined Passive Income)
+  // Portfolio income is included since it also generates income without active work
+  const freedomGap = totalExpenses - combinedPassiveIncome;
 
   // Income quadrant distribution
   const quadrantTotals = createEmptyQuadrantTotals();
@@ -557,8 +570,13 @@ async function getCurrentFinancialSnapshot(userId: number) {
   const totalExpenses = incomeStatement?.Expense.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
   const netCashflow = totalIncome - totalExpenses;
 
+  // Combined passive income (passive + portfolio) for freedom calculations
+  // Portfolio income from investments also generates money without active work
+  const combinedPassiveIncome = passiveIncome + portfolioIncome;
+
   // Calculate ratios
-  const passiveCoverageRatio = totalExpenses > 0 ? (passiveIncome / totalExpenses) * 100 : 0;
+  // Passive coverage now includes portfolio income since it also contributes to financial freedom
+  const passiveCoverageRatio = totalExpenses > 0 ? (combinedPassiveIncome / totalExpenses) * 100 : 0;
   const savingsRate = totalIncome > 0 ? (netCashflow / totalIncome) * 100 : 0;
 
   // --- RichFlow Metrics ---
@@ -585,8 +603,9 @@ async function getCurrentFinancialSnapshot(userId: number) {
   const totalAssetsWithCash = totalAssets + totalCashBalance;
   const solvencyRatio = totalAssetsWithCash > 0 ? (totalLiabilities / totalAssetsWithCash) * 100 : 0;
 
-  // 3. Freedom Gap (Expenses - Passive Income)
-  const freedomGap = totalExpenses - passiveIncome;
+  // 3. Freedom Gap (Expenses - Combined Passive Income)
+  // Portfolio income is included since it also generates income without active work
+  const freedomGap = totalExpenses - combinedPassiveIncome;
 
   // Income quadrant distribution
   const quadrantTotals = createEmptyQuadrantTotals();
@@ -957,11 +976,16 @@ export const getFinancialTrajectory = async (
       .reduce((sum, i) => sum + i.amount, 0);
     const totalIncome = incomeLines.reduce((sum, i) => sum + i.amount, 0);
 
+    // Combined passive income (passive + portfolio) for freedom calculations
+    // Portfolio income from investments also generates money without active work
+    const combinedPassiveIncome = passiveIncome + portfolioIncome;
+
     const totalExpenses = Array.from(state.expenses.values()).reduce((sum, expense) => sum + expense.amount, 0);
     const netCashflow = totalIncome - totalExpenses;
 
-    // Freedom Gap = Monthly Expenses - Passive Income
-    const freedomGap = totalExpenses - passiveIncome;
+    // Freedom Gap = Monthly Expenses - Combined Passive Income
+    // Portfolio income is included since it also generates income without active work
+    const freedomGap = totalExpenses - combinedPassiveIncome;
 
     // Wealth Velocity = Net Cashflow / Net Worth (if positive net worth)
     const wealthVelocity = netWorth > 0 ? (netCashflow / netWorth) : 0;

@@ -504,8 +504,11 @@ const Analysis: React.FC = () => {
       const totalIQ = p.incomeQuadrant.EMPLOYEE + p.incomeQuadrant.SELF_EMPLOYED + p.incomeQuadrant.BUSINESS_OWNER + p.incomeQuadrant.INVESTOR || 1;
       const prev = trajectoryData[idx - 1];
       const currencyChanged = prev ? prev.currency !== p.currency : false;
+      // Combined passive income (passive + portfolio) for freedom calculations
+      const combinedPassiveIncome = p.passiveIncome + p.portfolioIncome;
       return {
         ...p,
+        combinedPassiveIncome,
         quadrantPct: {
           EMPLOYEE: (p.incomeQuadrant.EMPLOYEE / totalIQ) * 100,
           SELF_EMPLOYED: (p.incomeQuadrant.SELF_EMPLOYED / totalIQ) * 100,
@@ -513,8 +516,8 @@ const Analysis: React.FC = () => {
           INVESTOR: (p.incomeQuadrant.INVESTOR / totalIQ) * 100,
         },
         currencyChanged,
-        gapArea: p.totalExpenses > p.passiveIncome ? (p.totalExpenses - p.passiveIncome) : 0,
-        surplusArea: p.passiveIncome > p.totalExpenses ? (p.passiveIncome - p.totalExpenses) : 0
+        gapArea: p.totalExpenses > combinedPassiveIncome ? (p.totalExpenses - combinedPassiveIncome) : 0,
+        surplusArea: combinedPassiveIncome > p.totalExpenses ? (combinedPassiveIncome - p.totalExpenses) : 0
       };
     });
   }, [trajectoryData]);
@@ -524,6 +527,10 @@ const Analysis: React.FC = () => {
     if (!trajectoryData || trajectoryData.length === 0) return null;
     const first = trajectoryData[0];
     const last = trajectoryData[trajectoryData.length - 1];
+
+    // Combined passive income (passive + portfolio) for freedom calculations
+    const firstCombinedPassive = first.passiveIncome + first.portfolioIncome;
+    const lastCombinedPassive = last.passiveIncome + last.portfolioIncome;
 
     const safeGrowth = (start: number, end: number) => {
       if (start === 0) return end === 0 ? 0 : (end > 0 ? 100 : -100);
@@ -538,8 +545,9 @@ const Analysis: React.FC = () => {
     const netWorthChange = last.netWorth - first.netWorth;
     const netWorthGrowthRate = safeGrowth(first.netWorth, last.netWorth);
 
-    const passiveIncomeChange = last.passiveIncome - first.passiveIncome;
-    const passiveIncomeGrowthRate = safeGrowth(first.passiveIncome, last.passiveIncome);
+    // Use combined passive income for passive income metrics
+    const passiveIncomeChange = lastCombinedPassive - firstCombinedPassive;
+    const passiveIncomeGrowthRate = safeGrowth(firstCombinedPassive, lastCombinedPassive);
 
     const freedomCrossoverPoint = trajectoryData.find((p, idx) => idx > 0 && p.freedomGap <= 0 && trajectoryData[idx - 1].freedomGap > 0);
 
@@ -554,7 +562,7 @@ const Analysis: React.FC = () => {
       freedomGap: { start: first.freedomGap, end: last.freedomGap, change: freedomGapChange, trendPercent: freedomGapTrend, crossoverDate: freedomCrossoverPoint?.date || null },
       wealthVelocity: { start: first.wealthVelocity, end: last.wealthVelocity, change: velocityChange },
       netWorth: { start: first.netWorth, end: last.netWorth, change: netWorthChange, growthRate: netWorthGrowthRate },
-      passiveIncome: { start: first.passiveIncome, end: last.passiveIncome, change: passiveIncomeChange, growthRate: passiveIncomeGrowthRate },
+      passiveIncome: { start: firstCombinedPassive, end: lastCombinedPassive, change: passiveIncomeChange, growthRate: passiveIncomeGrowthRate },
       recentCashflowTrend
     };
   }, [trajectoryData]);
@@ -1318,7 +1326,7 @@ const Analysis: React.FC = () => {
                     />
 
                     <StatCard
-                      title="Passive Income Growth"
+                      title="Passive + Portfolio Growth"
                       value={formatCurrencyValue(trajectoryMetrics.passiveIncome.change, user?.preferredCurrency)}
                       subValue={`${trajectoryMetrics.passiveIncome.growthRate.toFixed(1)}% increase`}
                       trend={trajectoryMetrics.passiveIncome.growthRate}
@@ -1370,15 +1378,15 @@ const Analysis: React.FC = () => {
                             <RechartsTooltip content={<ChartTooltip />} />
                             <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px', fontSize: '12px' }} verticalAlign="bottom" />
                             <Line type="monotone" dataKey="totalExpenses" name="Expenses" stroke="#f87171" strokeWidth={2} dot={false} />
-                            <Line type="monotone" dataKey="passiveIncome" name="Passive Income" stroke="#4ade80" strokeWidth={2} dot={false} />
+                            <Line type="monotone" dataKey="combinedPassiveIncome" name="Passive + Portfolio Income" stroke="#4ade80" strokeWidth={2} dot={false} />
 
 
                             {/* Crossover Point */}
                             {processedTrajectory.map((p, idx) => {
                               const prev = processedTrajectory[idx - 1];
-                              if (idx > 0 && p.passiveIncome >= p.totalExpenses && prev.passiveIncome < prev.totalExpenses) {
+                              if (idx > 0 && p.combinedPassiveIncome >= p.totalExpenses && prev.combinedPassiveIncome < prev.totalExpenses) {
                                 return (
-                                  <ReferenceDot key={p.date} x={p.date} y={p.passiveIncome} r={6} fill="#4ade80" stroke="#18181b" />
+                                  <ReferenceDot key={p.date} x={p.date} y={p.combinedPassiveIncome} r={6} fill="#4ade80" stroke="#18181b" />
                                 );
                               }
                               return null;
