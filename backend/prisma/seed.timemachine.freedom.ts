@@ -189,11 +189,19 @@ async function main() {
             userId: user.id,
             date: new Date('2020-01-31T23:59:59Z'),
             data: {
-                netWorth: 200 - 25000 - 4000, // Cash - Student Loan - CC = -28800
-                totalAssets: 200,
-                totalLiabilities: 29000,
-                totalIncome: 2200,
-                totalExpenses: 800 + 1200 + 300 // 2300 (Deficit)
+                assets: [],
+                liabilities: [
+                    [studentLoan.id, { id: studentLoan.id, name: studentLoan.name, value: 25000 }],
+                    [creditCard.id, { id: creditCard.id, name: creditCard.name, value: 4000 }]
+                ],
+                incomeLines: [[retailJob.id, { id: retailJob.id, name: retailJob.name, amount: 2200, type: 'EARNED', quadrant: 'EMPLOYEE' }]],
+                expenses: [
+                    [rent.id, { id: rent.id, name: rent.name, amount: 800 }],
+                    [livingExpenses.id, { id: livingExpenses.id, name: livingExpenses.name, amount: 1200 }],
+                    [loanPayment.id, { id: loanPayment.id, name: loanPayment.name, amount: 300 }]
+                ],
+                cashSavings: 200,
+                currency: { symbol: '$', name: 'US Dollar' }
             }
         }
     });
@@ -296,11 +304,16 @@ async function main() {
             userId: user.id,
             date: new Date('2022-12-31T23:59:59Z'),
             data: {
-                netWorth: 5000 - 25000, // Cash - Student Loan = -20000
-                totalAssets: 5000,
-                totalLiabilities: 25000,
-                totalIncome: 4000,
-                totalExpenses: 800 + 1000 + 300 // 2100 (Surplus!)
+                assets: [],
+                liabilities: [[studentLoan.id, { id: studentLoan.id, name: studentLoan.name, value: 25000 }]],
+                incomeLines: [[retailJob.id, { id: retailJob.id, name: retailJob.name, amount: 4000, type: 'EARNED', quadrant: 'EMPLOYEE' }]],
+                expenses: [
+                    [rent.id, { id: rent.id, name: rent.name, amount: 800 }],
+                    [livingExpenses.id, { id: livingExpenses.id, name: livingExpenses.name, amount: 1000 }],
+                    [loanPayment.id, { id: loanPayment.id, name: loanPayment.name, amount: 300 }]
+                ],
+                cashSavings: 5000,
+                currency: { symbol: '$', name: 'US Dollar' }
             }
         }
     });
@@ -405,11 +418,19 @@ async function main() {
             userId: user.id,
             date: new Date('2024-12-31T23:59:59Z'),
             data: {
-                netWorth: 5000 + 45000, // Cash + Index Funds = 50000 (Debt Free!)
-                totalAssets: 50000,
-                totalLiabilities: 0,
-                totalIncome: 6000 + 1500, // 7500
-                totalExpenses: 2100 // Assumed stable
+                assets: [[indexFunds.id, { id: indexFunds.id, name: indexFunds.name, value: 45000 }]],
+                liabilities: [],
+                incomeLines: [
+                    [retailJob.id, { id: retailJob.id, name: retailJob.name, amount: 6000, type: 'EARNED', quadrant: 'EMPLOYEE' }],
+                    [sideHustle.id, { id: sideHustle.id, name: sideHustle.name, amount: 1500, type: 'EARNED', quadrant: 'SELF_EMPLOYED' }]
+                ],
+                expenses: [
+                    [rent.id, { id: rent.id, name: rent.name, amount: 800 }],
+                    [livingExpenses.id, { id: livingExpenses.id, name: livingExpenses.name, amount: 1000 }],
+                    [loanPayment.id, { id: loanPayment.id, name: loanPayment.name, amount: 300 }]
+                ],
+                cashSavings: 5000,
+                currency: { symbol: '$', name: 'US Dollar' }
             }
         }
     });
@@ -558,11 +579,25 @@ async function main() {
             userId: user.id,
             date: new Date('2025-11-30T23:59:59Z'),
             data: {
-                netWorth: 60000 + 85000 + 300000 - 240000, // Cash + Stocks + Rental - Mortgage = 205000
-                totalAssets: 445000,
-                totalLiabilities: 240000,
-                totalIncome: 6000 + 1500 + 2500 + 2000 + 300, // 12300
-                totalExpenses: 2100 // Assumed stable base expenses
+                assets: [
+                    [indexFunds.id, { id: indexFunds.id, name: indexFunds.name, value: 85000 }],
+                    [rentalProp.id, { id: rentalProp.id, name: rentalProp.name, value: 300000 }]
+                ],
+                liabilities: [[mortgage.id, { id: mortgage.id, name: mortgage.name, value: 240000 }]],
+                incomeLines: [
+                    [retailJob.id, { id: retailJob.id, name: retailJob.name, amount: 6000, type: 'EARNED', quadrant: 'EMPLOYEE' }],
+                    [sideHustle.id, { id: sideHustle.id, name: sideHustle.name, amount: 1500, type: 'EARNED', quadrant: 'SELF_EMPLOYED' }],
+                    [rentalIncome.id, { id: rentalIncome.id, name: rentalIncome.name, amount: 2500, type: 'PASSIVE', quadrant: 'INVESTOR' }],
+                    [dividends.id, { id: dividends.id, name: dividends.name, amount: 300, type: 'PORTFOLIO', quadrant: 'INVESTOR' }],
+                    [digitalProduct.id, { id: digitalProduct.id, name: digitalProduct.name, amount: 2000, type: 'PASSIVE', quadrant: 'BUSINESS_OWNER' }]
+                ],
+                expenses: [
+                    [rent.id, { id: rent.id, name: rent.name, amount: 800 }],
+                    [livingExpenses.id, { id: livingExpenses.id, name: livingExpenses.name, amount: 1000 }],
+                    [loanPayment.id, { id: loanPayment.id, name: loanPayment.name, amount: 300 }]
+                ],
+                cashSavings: 60000,
+                currency: { symbol: '$', name: 'US Dollar' }
             }
         }
     });

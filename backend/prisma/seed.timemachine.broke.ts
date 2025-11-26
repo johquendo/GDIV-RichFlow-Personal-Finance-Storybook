@@ -208,11 +208,15 @@ async function main() {
             userId: user.id,
             date: new Date('2021-01-31T23:59:59Z'),
             data: {
-                netWorth: 5000 + 500000 - 450000, // 55000
-                totalAssets: 505000,
-                totalLiabilities: 450000,
-                totalIncome: 8000,
-                totalExpenses: 6500
+                assets: [[house.id, { id: house.id, name: house.name, value: 500000 }]],
+                liabilities: [[mortgage.id, { id: mortgage.id, name: mortgage.name, value: 450000 }]],
+                incomeLines: [[job.id, { id: job.id, name: job.name, amount: 8000, type: 'EARNED', quadrant: 'EMPLOYEE' }]],
+                expenses: [
+                    [lifestyle.id, { id: lifestyle.id, name: lifestyle.name, amount: 4000 }],
+                    [mortgagePayment.id, { id: mortgagePayment.id, name: mortgagePayment.name, amount: 2500 }]
+                ],
+                cashSavings: 5000,
+                currency: { symbol: '$', name: 'US Dollar' }
             }
         }
     });
@@ -312,11 +316,18 @@ async function main() {
             userId: user.id,
             date: new Date('2022-12-31T23:59:59Z'),
             data: {
-                netWorth: 0 + 500000 - 450000 - 10000, // 40000
-                totalAssets: 500000,
-                totalLiabilities: 460000,
-                totalIncome: 1500,
-                totalExpenses: 6500
+                assets: [[house.id, { id: house.id, name: house.name, value: 500000 }]],
+                liabilities: [
+                    [mortgage.id, { id: mortgage.id, name: mortgage.name, value: 450000 }],
+                    [creditCard.id, { id: creditCard.id, name: creditCard.name, value: 10000 }]
+                ],
+                incomeLines: [[unemployment.id, { id: unemployment.id, name: unemployment.name, amount: 1500, type: 'EARNED', quadrant: 'EMPLOYEE' }]],
+                expenses: [
+                    [lifestyle.id, { id: lifestyle.id, name: lifestyle.name, amount: 4000 }],
+                    [mortgagePayment.id, { id: mortgagePayment.id, name: mortgagePayment.name, amount: 2500 }]
+                ],
+                cashSavings: 0,
+                currency: { symbol: '$', name: 'US Dollar' }
             }
         }
     });
@@ -411,11 +422,18 @@ async function main() {
             userId: user.id,
             date: new Date('2024-12-31T23:59:59Z'),
             data: {
-                netWorth: 0 - 35000 - 20000, // -55000
-                totalAssets: 0,
-                totalLiabilities: 55000,
-                totalIncome: 1500,
-                totalExpenses: 4000 + 2000 // Lifestyle + Rent = 6000
+                assets: [],
+                liabilities: [
+                    [creditCard.id, { id: creditCard.id, name: creditCard.name, value: 35000 }],
+                    [personalLoan.id, { id: personalLoan.id, name: personalLoan.name, value: 20000 }]
+                ],
+                incomeLines: [[unemployment.id, { id: unemployment.id, name: unemployment.name, amount: 1500, type: 'EARNED', quadrant: 'EMPLOYEE' }]],
+                expenses: [
+                    [lifestyle.id, { id: lifestyle.id, name: lifestyle.name, amount: 4000 }],
+                    [rent.id, { id: rent.id, name: rent.name, amount: 2000 }]
+                ],
+                cashSavings: 0,
+                currency: { symbol: '$', name: 'US Dollar' }
             }
         }
     });
@@ -468,11 +486,21 @@ async function main() {
             userId: user.id,
             date: new Date('2025-11-20T23:59:59Z'),
             data: {
-                netWorth: 0 - 45000 - 20000, // -65000
-                totalAssets: 0,
-                totalLiabilities: 65000,
-                totalIncome: 1500 + 2500, // 4000
-                totalExpenses: 6000
+                assets: [],
+                liabilities: [
+                    [creditCard.id, { id: creditCard.id, name: creditCard.name, value: 45000 }],
+                    [personalLoan.id, { id: personalLoan.id, name: personalLoan.name, value: 20000 }]
+                ],
+                incomeLines: [
+                    [unemployment.id, { id: unemployment.id, name: unemployment.name, amount: 1500, type: 'EARNED', quadrant: 'EMPLOYEE' }],
+                    [gigJob.id, { id: gigJob.id, name: gigJob.name, amount: 2500, type: 'EARNED', quadrant: 'SELF_EMPLOYED' }]
+                ],
+                expenses: [
+                    [lifestyle.id, { id: lifestyle.id, name: lifestyle.name, amount: 4000 }],
+                    [rent.id, { id: rent.id, name: rent.name, amount: 2000 }]
+                ],
+                cashSavings: 0,
+                currency: { symbol: '$', name: 'US Dollar' }
             }
         }
     });

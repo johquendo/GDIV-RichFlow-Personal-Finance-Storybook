@@ -25,6 +25,36 @@ interface FinancialHealth {
   };
 }
 
+/**
+ * Helper to hydrate FinancialState from JSON snapshot
+ * Handles Map reconstruction
+ */
+function hydrateStateFromSnapshot(snapshotData: any): FinancialState {
+  return {
+    assets: new Map(snapshotData.assets),
+    liabilities: new Map(snapshotData.liabilities),
+    incomeLines: new Map(snapshotData.incomeLines),
+    expenses: new Map(snapshotData.expenses),
+    cashSavings: Number(snapshotData.cashSavings),
+    currency: snapshotData.currency
+  };
+}
+
+/**
+ * Helper to serialize FinancialState to JSON-compatible object
+ * Handles Map serialization
+ */
+function serializeStateForSnapshot(state: FinancialState): any {
+  return {
+    assets: Array.from(state.assets.entries()),
+    liabilities: Array.from(state.liabilities.entries()),
+    incomeLines: Array.from(state.incomeLines.entries()),
+    expenses: Array.from(state.expenses.entries()),
+    cashSavings: state.cashSavings,
+    currency: state.currency
+  };
+}
+
 // --- Pure Reducers ---
 
 const assetReducer = (state: FinancialState, event: Event): FinancialState => {
@@ -615,6 +645,66 @@ async function getCurrentFinancialSnapshot(userId: number) {
 }
 
 /**
+ * Create a financial snapshot for the user at the current time
+ * This serves as a checkpoint for faster future calculations
+ */
+export async function createSnapshot(userId: number): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { PreferredCurrency: true }
+  });
+
+  if (!user) throw new Error('User not found');
+
+  const events = await getEventsByUser({ userId, limit: 100000 });
+  const typedEvents = events as unknown as Event[];
+
+  // Sort events
+  typedEvents.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  // Determine initial currency
+  let initialCurrency = {
+    symbol: user.PreferredCurrency?.cur_symbol || '$',
+    name: user.PreferredCurrency?.cur_name || 'USD'
+  };
+
+  // Check for currency update events
+  const firstCurrencyEvent = typedEvents.find(e =>
+    e.entityType === EntityType.USER &&
+    e.actionType === ActionType.UPDATE &&
+    (e.beforeValue && (typeof e.beforeValue === 'string' ? JSON.parse(e.beforeValue).currencyCode : e.beforeValue.currencyCode))
+  );
+
+  if (firstCurrencyEvent && firstCurrencyEvent.beforeValue) {
+    const before = typeof firstCurrencyEvent.beforeValue === 'string'
+      ? JSON.parse(firstCurrencyEvent.beforeValue)
+      : firstCurrencyEvent.beforeValue;
+
+    if (before.currencyCode) {
+      initialCurrency = {
+        symbol: before.currencyCode,
+        name: before.currencyName || before.currencyCode
+      };
+    }
+  }
+
+  const now = new Date();
+  const state = reconstructStateFromEvents(typedEvents, now, initialCurrency);
+
+  // Serialize state
+  const snapshotData = serializeStateForSnapshot(state);
+
+  // Save to DB
+  await prisma.financialSnapshot.create({
+    data: {
+      userId,
+      date: now,
+      data: snapshotData
+    }
+  });
+}
+
+/**
  * Get financial snapshot - either current state or reconstructed point-in-time state
  */
 export const getFinancialSnapshot = async (userId: number, date?: string) => {
@@ -685,7 +775,37 @@ export const getFinancialSnapshot = async (userId: number, date?: string) => {
     }
   }
 
-  const state = reconstructStateFromEvents(typedEvents, targetDate, initialCurrency);
+  // OPTIMIZATION: Check for snapshots
+  // Find the latest snapshot before or on the target date
+  const latestSnapshot = await prisma.financialSnapshot.findFirst({
+    where: {
+      userId,
+      date: { lte: targetDate }
+    },
+    orderBy: { date: 'desc' }
+  });
+
+  let state: FinancialState;
+
+  if (latestSnapshot) {
+    // Hydrate state from snapshot
+    state = hydrateStateFromSnapshot(latestSnapshot.data);
+
+    // Filter events that happened AFTER the snapshot but BEFORE/ON targetDate
+    const snapshotDate = new Date(latestSnapshot.date);
+    const relevantEvents = typedEvents
+      .filter(e => {
+        const eventDate = new Date(e.timestamp);
+        return eventDate > snapshotDate && eventDate <= targetDate;
+      })
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    // Apply remaining events
+    state = relevantEvents.reduce(rootReducer, state);
+  } else {
+    // Fallback to full replay
+    state = reconstructStateFromEvents(typedEvents, targetDate, initialCurrency);
+  }
 
   // Reconstruct past states for trends
   const oneMonthAgo = new Date(targetDate); oneMonthAgo.setMonth(targetDate.getMonth() - 1);
@@ -793,6 +913,25 @@ export const getFinancialTrajectory = async (
 
   let currentDate = new Date(start);
   let eventIndex = 0;
+
+  // OPTIMIZATION: Check for snapshots
+  // Find the latest snapshot before the start date
+  const latestSnapshot = await prisma.financialSnapshot.findFirst({
+    where: {
+      userId,
+      date: { lte: start }
+    },
+    orderBy: { date: 'desc' }
+  });
+
+  if (latestSnapshot) {
+    state = hydrateStateFromSnapshot(latestSnapshot.data);
+    const snapshotDate = new Date(latestSnapshot.date);
+
+    // Find the index of the first event after the snapshot
+    eventIndex = typedEvents.findIndex(e => new Date(e.timestamp) > snapshotDate);
+    if (eventIndex === -1) eventIndex = typedEvents.length; // No events after snapshot
+  }
 
   // Incremental state reconstruction
   while (currentDate <= end) {

@@ -208,11 +208,16 @@ async function main() {
       userId: user.id,
       date: new Date('2020-01-31T23:59:59Z'),
       data: {
-        netWorth: 0,
-        totalAssets: 0,
-        totalLiabilities: 0,
-        totalIncome: 3200,
-        totalExpenses: 1420
+        assets: [],
+        liabilities: [],
+        incomeLines: [[salary1.id, { id: salary1.id, name: salary1.name, amount: 3200, type: 'EARNED', quadrant: 'EMPLOYEE' }]],
+        expenses: [
+          [rent1.id, { id: rent1.id, name: rent1.name, amount: 1000 }],
+          [utilities.id, { id: utilities.id, name: utilities.name, amount: 120 }],
+          [groceries.id, { id: groceries.id, name: groceries.name, amount: 300 }]
+        ],
+        cashSavings: 0,
+        currency: { symbol: '$', name: 'US Dollar' }
       }
     }
   });
@@ -342,11 +347,16 @@ async function main() {
       userId: user.id,
       date: new Date('2023-01-31T23:59:59Z'),
       data: {
-        netWorth: 2500,
-        totalAssets: 2500,
-        totalLiabilities: 0,
-        totalIncome: 4200,
-        totalExpenses: 1420 // Assuming expenses stayed roughly same for simplicity in snapshot
+        assets: [],
+        liabilities: [],
+        incomeLines: [[salary1.id, { id: salary1.id, name: salary1.name, amount: 4200, type: 'EARNED', quadrant: 'EMPLOYEE' }]],
+        expenses: [
+          [rent1.id, { id: rent1.id, name: rent1.name, amount: 1000 }],
+          [utilities.id, { id: utilities.id, name: utilities.name, amount: 120 }],
+          [groceries.id, { id: groceries.id, name: groceries.name, amount: 300 }]
+        ],
+        cashSavings: 2500,
+        currency: { symbol: '$', name: 'US Dollar' }
       }
     }
   });
@@ -502,11 +512,16 @@ async function main() {
       userId: user.id,
       date: new Date('2024-03-31T23:59:59Z'),
       data: {
-        netWorth: 3000 + 8000 - 5000, // Cash + Car - Loan = 6000
-        totalAssets: 11000, // 3000 Cash + 8000 Car
-        totalLiabilities: 5000,
-        totalIncome: 4500,
-        totalExpenses: 1750
+        assets: [[car.id, { id: car.id, name: car.name, value: 8000 }]],
+        liabilities: [[carLoan.id, { id: carLoan.id, name: carLoan.name, value: 5000 }]],
+        incomeLines: [[salary1.id, { id: salary1.id, name: salary1.name, amount: 4500, type: 'EARNED', quadrant: 'EMPLOYEE' }]],
+        expenses: [
+          [rent1.id, { id: rent1.id, name: rent1.name, amount: 1200 }],
+          [utilities.id, { id: utilities.id, name: utilities.name, amount: 150 }],
+          [groceries.id, { id: groceries.id, name: groceries.name, amount: 400 }]
+        ],
+        cashSavings: 3000,
+        currency: { symbol: '$', name: 'US Dollar' }
       }
     }
   });
@@ -641,11 +656,23 @@ async function main() {
       userId: user.id,
       date: new Date('2024-10-31T23:59:59Z'),
       data: {
-        netWorth: 8000 + 8000 + 5000 - 5000, // Cash + Car + Stocks - Loan = 16000
-        totalAssets: 21000, // 8000 Cash + 8000 Car + 5000 Stocks
-        totalLiabilities: 5000,
-        totalIncome: 5200 + 800 + 50, // Salary + Freelance + Divs = 6050
-        totalExpenses: 1750
+        assets: [
+          [car.id, { id: car.id, name: car.name, value: 8000 }],
+          [stocks.id, { id: stocks.id, name: stocks.name, value: 5000 }]
+        ],
+        liabilities: [[carLoan.id, { id: carLoan.id, name: carLoan.name, value: 5000 }]],
+        incomeLines: [
+          [salary1.id, { id: salary1.id, name: salary1.name, amount: 5200, type: 'EARNED', quadrant: 'EMPLOYEE' }],
+          [freelance.id, { id: freelance.id, name: freelance.name, amount: 800, type: 'EARNED', quadrant: 'SELF_EMPLOYED' }],
+          [dividends.id, { id: dividends.id, name: dividends.name, amount: 50, type: 'PORTFOLIO', quadrant: 'INVESTOR' }]
+        ],
+        expenses: [
+          [rent1.id, { id: rent1.id, name: rent1.name, amount: 1200 }],
+          [utilities.id, { id: utilities.id, name: utilities.name, amount: 150 }],
+          [groceries.id, { id: groceries.id, name: groceries.name, amount: 400 }]
+        ],
+        cashSavings: 8000,
+        currency: { symbol: '$', name: 'US Dollar' }
       }
     }
   });
@@ -798,11 +825,26 @@ async function main() {
       userId: user.id,
       date: new Date('2025-03-31T23:59:59Z'),
       data: {
-        netWorth: 8000 + 8000 + 5000 + 150000 - 120000, // Cash + Car + Stocks + Rental - Mortgage = 51000
-        totalAssets: 171000,
-        totalLiabilities: 120000,
-        totalIncome: 5200 + 800 + 50 + 1200, // 7250
-        totalExpenses: 1750 + 400 // 2150
+        assets: [
+          [car.id, { id: car.id, name: car.name, value: 8000 }],
+          [stocks.id, { id: stocks.id, name: stocks.name, value: 5000 }],
+          [rentalProperty.id, { id: rentalProperty.id, name: rentalProperty.name, value: 150000 }]
+        ],
+        liabilities: [[mortgage.id, { id: mortgage.id, name: mortgage.name, value: 120000 }]],
+        incomeLines: [
+          [salary1.id, { id: salary1.id, name: salary1.name, amount: 5200, type: 'EARNED', quadrant: 'EMPLOYEE' }],
+          [freelance.id, { id: freelance.id, name: freelance.name, amount: 800, type: 'EARNED', quadrant: 'SELF_EMPLOYED' }],
+          [dividends.id, { id: dividends.id, name: dividends.name, amount: 50, type: 'PORTFOLIO', quadrant: 'INVESTOR' }],
+          [rentalIncome.id, { id: rentalIncome.id, name: rentalIncome.name, amount: 1200, type: 'PASSIVE', quadrant: 'INVESTOR' }]
+        ],
+        expenses: [
+          [rent1.id, { id: rent1.id, name: rent1.name, amount: 1200 }],
+          [utilities.id, { id: utilities.id, name: utilities.name, amount: 150 }],
+          [groceries.id, { id: groceries.id, name: groceries.name, amount: 400 }],
+          [propertyTax.id, { id: propertyTax.id, name: propertyTax.name, amount: 400 }]
+        ],
+        cashSavings: 8000,
+        currency: { symbol: '€', name: 'EUR' }
       }
     }
   });

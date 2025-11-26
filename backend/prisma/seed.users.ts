@@ -12,27 +12,31 @@ const users = [
     password: 'C28Qw5UaXucMup',
     isAdmin: true,
     preferredCurrencyId: 1, // USD
+    currency: { symbol: '$', name: 'US Dollar' }
   },
   {
     name: 'testuser1',
     email: 'testuser1@example.com',
     password: 'Test123!',
     isAdmin: false,
-    preferredCurrencyId: 10, // USD
+    preferredCurrencyId: 10, // SGD
+    currency: { symbol: 'S$', name: 'Singapore Dollar' }
   },
   {
     name: 'testuser2',
     email: 'testuser2@example.com',
     password: 'Test123!',
     isAdmin: false,
-    preferredCurrencyId: 20, // EUR
+    preferredCurrencyId: 20, // PLN
+    currency: { symbol: 'zł', name: 'Polish Zloty' }
   },
   {
     name: 'testuser3',
     email: 'testuser3@example.com',
     password: 'Test123!',
     isAdmin: false,
-    preferredCurrencyId: 30, // GBP
+    preferredCurrencyId: 30, // CLP
+    currency: { symbol: '$', name: 'Chilean Peso' }
   },
 ];
 
@@ -145,11 +149,12 @@ async function main() {
           userId,
           date: new Date(),
           data: {
-            netWorth: 0,
-            totalAssets: 0,
-            totalLiabilities: 0,
-            totalIncome: 0,
-            totalExpenses: 0
+            assets: [],
+            liabilities: [],
+            incomeLines: [],
+            expenses: [],
+            cashSavings: 0,
+            currency: user.currency
           }
         }
       });

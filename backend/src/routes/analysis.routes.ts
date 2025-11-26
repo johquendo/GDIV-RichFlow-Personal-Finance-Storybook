@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.middleware';
-import { getFinancialSnapshotHandler, getFinancialTrajectoryHandler } from '../controllers/analysis.controller';
+import { getFinancialSnapshotHandler, getFinancialTrajectoryHandler, createSnapshotHandler } from '../controllers/analysis.controller';
 
 const router = Router();
 
@@ -17,5 +17,12 @@ router.get('/snapshot', authenticateToken, getFinancialSnapshotHandler);
  * @access Private
  */
 router.get('/trajectory', authenticateToken, getFinancialTrajectoryHandler);
+
+/**
+ * @route POST /api/analysis/snapshot
+ * @desc Manually trigger a financial snapshot creation
+ * @access Private
+ */
+router.post('/snapshot', authenticateToken, createSnapshotHandler);
 
 export default router;
