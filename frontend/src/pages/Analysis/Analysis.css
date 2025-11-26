@@ -44,12 +44,12 @@
 .time-machine-reset {
   margin-left: 0.5rem;
   font-size: 0.75rem;
-  color: #FFD700;
+  color: #eaca6a;
   transition: color 0.2s;
 }
 
 .time-machine-reset:hover {
-  color: rgba(255, 215, 0, 0.8);
+  color: rgba(234, 202, 106, 0.8);
 }
 
 /* Compare Button */
@@ -65,13 +65,13 @@
 
 .compare-button.active {
   background-color: rgba(24, 24, 27, 0.8);
-  border-color: rgba(157, 109, 212, 0.5);
+  border-color: rgba(121, 76, 181, 0.5);
   color: white;
-  box-shadow: 0 0 0 2px rgba(157, 109, 212, 0.25), 0 0 18px rgba(157, 109, 212, 0.55);
+  box-shadow: 0 0 0 2px rgba(121, 76, 181, 0.25), 0 0 18px rgba(121, 76, 181, 0.55);
 }
 
 .compare-button.active:hover {
-  box-shadow: 0 0 0 2px rgba(157, 109, 212, 0.35), 0 0 24px rgba(157, 109, 212, 0.75);
+  box-shadow: 0 0 0 2px rgba(121, 76, 181, 0.35), 0 0 24px rgba(121, 76, 181, 0.75);
 }
 
 .compare-button.inactive {
@@ -86,7 +86,7 @@
 
 /* Back Button */
 .analysis-back-btn {
-  background: linear-gradient(135deg, #EDCA69 0%, #f2d06b 100%);
+  background: linear-gradient(135deg, #eaca6a 0%, #f2d06b 100%);
   color: #000;
   border: none;
   border-radius: 6px;
@@ -95,7 +95,7 @@
   cursor: pointer;
   width: fit-content;
   transition: transform .18s, box-shadow .18s;
-  box-shadow: 0 4px 12px rgba(237, 202, 105, 0.25);
+  box-shadow: 0 4px 12px rgba(234, 202, 106, 0.25);
   min-height: 36px;
   font-size: 0.85rem;
   white-space: nowrap;
@@ -103,7 +103,7 @@
 
 .analysis-back-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(237, 202, 105, 0.4);
+  box-shadow: 0 6px 16px rgba(234, 202, 106, 0.4);
 }
 
 /* Header Right Container */

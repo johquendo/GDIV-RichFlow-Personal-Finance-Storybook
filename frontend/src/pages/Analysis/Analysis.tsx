@@ -88,10 +88,37 @@ type TrajectoryPoint = {
 
 
 const QUADRANT_COLORS = {
-  EMPLOYEE: '#60a5fa', // Blue
-  SELF_EMPLOYED: '#c084fc', // Purple
-  BUSINESS_OWNER: '#fbbf24', // Gold
-  INVESTOR: '#4ade80' // Green
+  EMPLOYEE: '#794cb5', // Purple
+  SELF_EMPLOYED: '#eaca6a', // Gold
+  BUSINESS_OWNER: '#41d288', // Green
+  INVESTOR: '#ff7d7e' // Red
+};
+
+// Helper to format freedom date for display
+const formatFreedomDate = (freedomDate: string | null): string => {
+  if (!freedomDate) return 'Not Projected';
+  
+  // Handle special status strings
+  const specialStatuses = ['Achieved', 'No Passive Income', 'Insufficient Data', 'Stagnant/Declining', '> 50 Years'];
+  if (specialStatuses.includes(freedomDate)) {
+    return freedomDate;
+  }
+  
+  // Try to parse as ISO date (YYYY-MM-DD)
+  const dateMatch = freedomDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateMatch) {
+    const date = new Date(freedomDate + 'T00:00:00');
+    if (!isNaN(date.getTime())) {
+      return date.toLocaleDateString(undefined, { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    }
+  }
+  
+  // Return as-is if we can't parse it
+  return freedomDate;
 };
 
 const StatCard: React.FC<{
@@ -105,8 +132,8 @@ const StatCard: React.FC<{
   accentColor?: 'gold' | 'purple' | 'default';
   invertTrendColor?: boolean;
 }> = ({ title, value, subValue, trend, className = '', icon, children, accentColor = 'default', invertTrendColor = false }) => {
-  const borderColor = accentColor === 'gold' ? 'group-hover:border-[#FFD700]/30' :
-    accentColor === 'purple' ? 'group-hover:border-[#800080]/30' :
+  const borderColor = accentColor === 'gold' ? 'group-hover:border-[#eaca6a]/30' :
+    accentColor === 'purple' ? 'group-hover:border-[#794cb5]/30' :
       'group-hover:border-white/10';
 
   return (
@@ -124,8 +151,8 @@ const StatCard: React.FC<{
             {value}
             {trend !== undefined && trend !== null && Math.abs(trend) > 0 && (
               <span className={`text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1 ${(invertTrendColor ? trend < 0 : trend >= 0)
-                ? 'bg-green-500/10 text-green-400'
-                : 'bg-red-500/10 text-red-400'
+                ? 'bg-[#41d288]/10 text-[#41d288]'
+                : 'bg-[#ff7d7e]/10 text-[#ff7d7e]'
                 }`}>
                 {trend >= 0 ? '▲' : '▼'} {Math.abs(trend).toFixed(1)}%
               </span>
@@ -413,12 +440,25 @@ const Analysis: React.FC = () => {
     if (freedomStart === 'Achieved' && freedomEnd === 'Achieved') {
       freedomChangeText = 'Achieved → Achieved';
     } else if (freedomStart === 'Achieved' && freedomEnd !== 'Achieved') {
-      freedomChangeText = 'Achieved → Not achieved';
+      freedomChangeText = `Achieved → ${formatFreedomDate(freedomEnd)}`;
     } else if (freedomStart !== 'Achieved' && freedomEnd === 'Achieved') {
-      freedomChangeText = 'Not achieved → Achieved';
+      freedomChangeText = `${formatFreedomDate(freedomStart)} → Achieved`;
     } else if (freedomStart && freedomEnd) {
-      const m = monthsBetween(freedomStart, freedomEnd);
-      freedomChangeText = `${freedomStart} → ${freedomEnd} (${m === 0 ? 'no change' : `${m > 0 ? '+' : ''}${m} mo`})`;
+      // Check if both are actual dates (not special status strings)
+      const specialStatuses = ['No Passive Income', 'Insufficient Data', 'Stagnant/Declining', '> 50 Years'];
+      const startIsDate = !specialStatuses.includes(freedomStart) && /^\d{4}-\d{2}-\d{2}$/.test(freedomStart);
+      const endIsDate = !specialStatuses.includes(freedomEnd) && /^\d{4}-\d{2}-\d{2}$/.test(freedomEnd);
+      
+      if (startIsDate && endIsDate) {
+        const m = monthsBetween(freedomStart, freedomEnd);
+        freedomChangeText = `${formatFreedomDate(freedomStart)} → ${formatFreedomDate(freedomEnd)} (${m === 0 ? 'no change' : `${m > 0 ? '+' : ''}${m} mo`})`;
+      } else {
+        freedomChangeText = `${formatFreedomDate(freedomStart)} → ${formatFreedomDate(freedomEnd)}`;
+      }
+    } else if (freedomStart) {
+      freedomChangeText = `${formatFreedomDate(freedomStart)} → No projection`;
+    } else if (freedomEnd) {
+      freedomChangeText = `No projection → ${formatFreedomDate(freedomEnd)}`;
     }
 
     const effStart = start.financialHealth.assetEfficiency || 0;
@@ -580,7 +620,7 @@ const Analysis: React.FC = () => {
   // Timeline controller (date picker)
   const timelineController = (
     <div className="time-machine-controller">
-      <span className="time-machine-label">Time Machine</span>
+      <span className="time-machine-label">Select</span>
       <div className="time-machine-divider" />
       <input
         type="date"
@@ -600,43 +640,6 @@ const Analysis: React.FC = () => {
     <div className="analysis-header-right">
       {timelineController}
 
-      {showCompare && (
-        <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="h-4 w-px bg-white/10 mx-1" />
-          <div className="flex items-center gap-2 bg-zinc-900/80 border border-white/10 rounded-full px-3 py-1.5 backdrop-blur-sm">
-            <span className="text-zinc-500 text-xs font-medium">VS</span>
-            <input
-              type="date"
-              value={compareStart}
-              onChange={(e) => setCompareStart(e.target.value)}
-              className="bg-transparent border-none text-white text-xs focus:ring-0 p-0 w-[85px] [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-calendar-picker-indicator]:hover:opacity-100"
-              placeholder="Start"
-            />
-            <span className="text-zinc-600 text-xs">→</span>
-            <input
-              type="date"
-              value={compareEnd}
-              onChange={(e) => setCompareEnd(e.target.value)}
-              className="bg-transparent border-none text-white text-xs focus:ring-0 p-0 w-[85px] [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-calendar-picker-indicator]:hover:opacity-100"
-              placeholder="End"
-            />
-            {compareStart && compareEnd && (
-              <button
-                onClick={fetchCompareReport}
-                disabled={compareLoading}
-                className="ml-1 w-5 h-5 flex items-center justify-center rounded-full bg-[#9d6dd4] text-white hover:bg-[#9d6dd4]/80 transition-colors disabled:opacity-50"
-              >
-                {compareLoading ? (
-                  <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-                )}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
       <button
         onClick={() => setShowCompare(s => !s)}
         aria-pressed={showCompare}
@@ -655,13 +658,13 @@ const Analysis: React.FC = () => {
     return (
       <div
         onClick={() => handleJumpToSnapshot(label)}
-        className="rounded-md border border-zinc-700 bg-zinc-900/95 backdrop-blur-sm p-3 text-xs shadow-xl min-w-[180px] cursor-pointer hover:border-[#FFD700] transition-colors"
+        className="rounded-md border border-zinc-700 bg-zinc-900/95 backdrop-blur-sm p-3 text-xs shadow-xl min-w-[180px] cursor-pointer hover:border-[#eaca6a] transition-colors"
         style={{ zIndex: 1000, pointerEvents: 'auto' }}
         title="Click to view snapshot"
       >
         <div className="font-semibold text-white mb-1 flex items-center justify-between">
           <span>{new Date(label).toLocaleDateString()}</span>
-          <span className="text-[#FFD700] text-[10px]">📸 SNAPSHOT</span>
+          <span className="text-[#eaca6a] text-[10px]">📸 SNAPSHOT</span>
         </div>
         {payload.map((p: any) => (
           <div key={p.dataKey} className="flex justify-between gap-2">
@@ -680,51 +683,51 @@ const Analysis: React.FC = () => {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-black text-white">
         <div className="flex flex-col items-center gap-2">
-          <div className="animate-pulse text-[#FFD700] text-sm">Loading Financial Data...</div>
+          <div className="animate-pulse text-[#eaca6a] text-sm">Loading Financial Data...</div>
           {slowSnapshot && <div className="text-xs text-zinc-500">Fetching snapshot…</div>}
-          {snapshotError && <div className="text-xs text-red-400">{snapshotError}</div>}
+          {snapshotError && <div className="text-xs text-[#ff7d7e]">{snapshotError}</div>}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen w-full bg-black text-white overflow-hidden  selection:bg-[#FFD700]/30">
+    <div className="flex flex-col h-screen w-full bg-black text-white overflow-hidden  selection:bg-[#eaca6a]/30">
       <Header title="Analysis" hideActions rightContent={headerRight} />
       <div className="flex flex-1 overflow-hidden relative">
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden relative">
           {/* Background Ambient Glow */}
-          <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-[#800080]/20 rounded-full blur-[120px] pointer-events-none" />
-          <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-[#FFD700]/10 rounded-full blur-[120px] pointer-events-none" />
+          <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-[#794cb5]/20 rounded-full blur-[120px] pointer-events-none" />
+          <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-[#eaca6a]/10 rounded-full blur-[120px] pointer-events-none" />
           <main className="flex-1 overflow-y-auto p-6 md:p-8 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
             {(snapshotError || compareError || trajectoryError) && (
               <div className="max-w-7xl mx-auto mb-4 space-y-2">
                 {snapshotError && (
-                  <div className="rounded-lg border border-red-600/30 bg-red-950/40 px-4 py-2 text-xs text-red-300 flex justify-between">
+                  <div className="rounded-lg border border-[#ff7d7e]/30 bg-[#ff7d7e]/10 px-4 py-2 text-xs text-[#ff7d7e] flex justify-between">
                     <span>Snapshot Error: {snapshotError}</span>
-                    <button onClick={() => setSnapshotError(null)} className="text-red-400 hover:text-red-300">Dismiss</button>
+                    <button onClick={() => setSnapshotError(null)} className="text-[#ff7d7e] hover:text-[#ff7d7e]/80">Dismiss</button>
                   </div>
                 )}
                 {compareError && (
-                  <div className="rounded-lg border border-red-600/30 bg-red-950/40 px-4 py-2 text-xs text-red-300 flex justify-between">
+                  <div className="rounded-lg border border-[#ff7d7e]/30 bg-[#ff7d7e]/10 px-4 py-2 text-xs text-[#ff7d7e] flex justify-between">
                     <span>Compare Error: {compareError}</span>
-                    <button onClick={() => setCompareError(null)} className="text-red-400 hover:text-red-300">Dismiss</button>
+                    <button onClick={() => setCompareError(null)} className="text-[#ff7d7e] hover:text-[#ff7d7e]/80">Dismiss</button>
                   </div>
                 )}
                 {trajectoryError && (
-                  <div className="rounded-lg border border-red-600/30 bg-red-950/40 px-4 py-2 text-xs text-red-300 flex justify-between">
+                  <div className="rounded-lg border border-[#ff7d7e]/30 bg-[#ff7d7e]/10 px-4 py-2 text-xs text-[#ff7d7e] flex justify-between">
                     <span>Trajectory Error: {trajectoryError}</span>
-                    <button onClick={() => setTrajectoryError(null)} className="text-red-400 hover:text-red-300">Dismiss</button>
+                    <button onClick={() => setTrajectoryError(null)} className="text-[#ff7d7e] hover:text-[#ff7d7e]/80">Dismiss</button>
                   </div>
                 )}
               </div>
             )}
             {(slowCompare && compareLoading) && (
-              <div className="fixed top-20 right-4 z-50 rounded-full bg-zinc-900/80 border border-[#9d6dd4]/40 px-3 py-1 text-[10px] text-[#9d6dd4] shadow-lg">Generating comparison…</div>
+              <div className="fixed top-20 right-4 z-50 rounded-full bg-zinc-900/80 border border-[#794cb5]/40 px-3 py-1 text-[10px] text-[#794cb5] shadow-lg">Generating comparison…</div>
             )}
             {(slowTrajectory && trajectoryLoading) && (
-              <div className="fixed top-32 right-4 z-50 rounded-full bg-zinc-900/80 border border-[#FFD700]/40 px-3 py-1 text-[10px] text-[#FFD700] shadow-lg">Updating trajectory…</div>
+              <div className="fixed top-32 right-4 z-50 rounded-full bg-zinc-900/80 border border-[#eaca6a]/40 px-3 py-1 text-[10px] text-[#eaca6a] shadow-lg">Updating trajectory…</div>
             )}
             {showCompare && (
               <div className="max-w-7xl mx-auto mb-6 rounded-2xl bg-zinc-900/70 border border-white/5 p-4 md:p-6">
@@ -749,7 +752,7 @@ const Analysis: React.FC = () => {
                         value={compareStart}
                         onChange={(e) => setCompareStart(e.target.value)}
                         max={compareEnd || new Date().toISOString().split('T')[0]}
-                        className="bg-zinc-900/60 border border-white/10 text-white text-sm rounded-lg px-3 py-2 w-full md:w-48 focus:outline-none focus:ring-1 focus:ring-[#9d6dd4] cursor-pointer [&::-webkit-calendar-picker-indicator]:invert"
+                        className="bg-zinc-900/60 border border-white/10 text-white text-sm rounded-lg px-3 py-2 w-full md:w-48 focus:outline-none focus:ring-1 focus:ring-[#794cb5] cursor-pointer [&::-webkit-calendar-picker-indicator]:invert"
                       />
                     </div>
                     <button
@@ -772,7 +775,7 @@ const Analysis: React.FC = () => {
                         onChange={(e) => setCompareEnd(e.target.value)}
                         min={compareStart || undefined}
                         max={new Date().toISOString().split('T')[0]}
-                        className="bg-zinc-900/60 border border-white/10 text-white text-sm rounded-lg px-3 py-2 w-full md:w-48 focus:outline-none focus:ring-1 focus:ring-[#9d6dd4] cursor-pointer [&::-webkit-calendar-picker-indicator]:invert"
+                        className="bg-zinc-900/60 border border-white/10 text-white text-sm rounded-lg px-3 py-2 w-full md:w-48 focus:outline-none focus:ring-1 focus:ring-[#794cb5] cursor-pointer [&::-webkit-calendar-picker-indicator]:invert"
                       />
                     </div>
                     <button
@@ -803,7 +806,7 @@ const Analysis: React.FC = () => {
                         onClick={fetchCompareReport}
                         disabled={!rangeOk || compareLoading}
                         className={`ml-auto md:ml-0 px-4 py-2 rounded-full text-sm transition-all ${rangeOk && !compareLoading
-                          ? 'bg-[#9d6dd4]/20 text-white border border-[#9d6dd4]/40 hover:bg-[#9d6dd4]/30 shadow-[0_0_0_2px_rgba(157,109,212,0.25),0_0_18px_rgba(157,109,212,0.55)]'
+                          ? 'bg-[#794cb5]/20 text-white border border-[#794cb5]/40 hover:bg-[#794cb5]/30 shadow-[0_0_0_2px_rgba(121,76,181,0.25),0_0_18px_rgba(121,76,181,0.55)]'
                           : 'bg-zinc-900/60 text-zinc-500 border border-white/10 cursor-not-allowed'
                           }`}
                         title={rangeOk ? 'Generate comparison report' : 'Pick valid start and end dates'}
@@ -830,7 +833,7 @@ const Analysis: React.FC = () => {
                     <div className="text-xs text-zinc-400 uppercase mb-1">Wealth Runway</div>
                     <div className="text-sm">
                       {compareMetrics.health.runway.start} → {compareMetrics.health.runway.end} months{' '}
-                      <span className={`${compareMetrics.health.runway.delta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      <span className={`${compareMetrics.health.runway.delta >= 0 ? 'text-[#41d288]' : 'text-[#ff7d7e]'}`}>
                         ({compareMetrics.health.runway.delta >= 0 ? '+' : ''}{compareMetrics.health.runway.delta})
                       </span>
                     </div>
@@ -843,7 +846,7 @@ const Analysis: React.FC = () => {
                     <div className="text-xs text-zinc-400 uppercase mb-1">Asset Efficiency (ROA)</div>
                     <div className="text-sm">
                       {compareMetrics.health.efficiency.start}% → {compareMetrics.health.efficiency.end}%{' '}
-                      <span className={`${compareMetrics.health.efficiency.delta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      <span className={`${compareMetrics.health.efficiency.delta >= 0 ? 'text-[#41d288]' : 'text-[#ff7d7e]'}`}>
                         ({compareMetrics.health.efficiency.delta >= 0 ? '+' : ''}{compareMetrics.health.efficiency.delta} pts)
                       </span>
                     </div>
@@ -868,7 +871,7 @@ const Analysis: React.FC = () => {
                     </div>
                     <div>
                       <div className="text-zinc-400">Change</div>
-                      <div className={`${compareMetrics.netWorth.delta >= 0 ? 'text-green-400' : 'text-red-400'} font-semibold`}>
+                      <div className={`${compareMetrics.netWorth.delta >= 0 ? 'text-[#41d288]' : 'text-[#ff7d7e]'} font-semibold`}>
                         {compareMetrics.netWorth.delta >= 0 ? '+' : ''}
                         {formatHistorical(Math.abs(compareMetrics.netWorth.delta), compareMetrics.endCurrency)}
                         {typeof compareMetrics.netWorth.pct === 'number' && (
@@ -898,7 +901,7 @@ const Analysis: React.FC = () => {
                           <span className="text-zinc-500">→</span>
                           <span>{formatHistorical(compareMetrics.balance[k].end, compareMetrics.endCurrency)}</span>
                         </div>
-                        <div className={`${compareMetrics.balance[k].delta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        <div className={`${compareMetrics.balance[k].delta >= 0 ? 'text-[#41d288]' : 'text-[#ff7d7e]'}`}>
                           {compareMetrics.balance[k].delta >= 0 ? '+' : ''}
                           {formatHistorical(Math.abs(compareMetrics.balance[k].delta), compareMetrics.endCurrency)}
                         </div>
@@ -926,7 +929,7 @@ const Analysis: React.FC = () => {
                           <span className="text-zinc-500">→</span>
                           <span>{formatHistorical(compareMetrics.cashflow.end[k], compareMetrics.endCurrency)}</span>
                         </div>
-                        <div className={`${compareMetrics.cashflow.delta[k] >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        <div className={`${compareMetrics.cashflow.delta[k] >= 0 ? 'text-[#41d288]' : 'text-[#ff7d7e]'}`}>
                           {compareMetrics.cashflow.delta[k] >= 0 ? '+' : ''}
                           {formatHistorical(Math.abs(compareMetrics.cashflow.delta[k]), compareMetrics.endCurrency)}
                         </div>
@@ -947,7 +950,7 @@ const Analysis: React.FC = () => {
                         <div className="text-zinc-400">{label}</div>
                         <div>
                           {obj.start}% → {obj.end}%{' '}
-                          <span className={`${obj.delta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          <span className={`${obj.delta >= 0 ? 'text-[#41d288]' : 'text-[#ff7d7e]'}`}>
                             ({obj.delta >= 0 ? '+' : ''}{obj.delta} pts)
                           </span>
                         </div>
@@ -969,7 +972,7 @@ const Analysis: React.FC = () => {
                         </div>
                         <div>
                           {row.startPct.toFixed(1)}% → {row.endPct.toFixed(1)}%{' '}
-                          <span className={`${row.deltaPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          <span className={`${row.deltaPct >= 0 ? 'text-[#41d288]' : 'text-[#ff7d7e]'}`}>
                             ({row.deltaPct >= 0 ? '+' : ''}{row.deltaPct.toFixed(1)}%)
                           </span>
                         </div>
@@ -996,7 +999,7 @@ const Analysis: React.FC = () => {
                 >
                   <div className="mt-4 h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-linear-to-r from-[#FFD700] to-[#800080]"
+                      className="h-full bg-linear-to-r from-[#eaca6a] to-[#794cb5]"
                       style={{ width: `${Math.min(Math.max((snapshotData.balanceSheet.netWorth / (snapshotData.balanceSheet.totalAssets || 1)) * 100, 5), 100)}%` }}
                     />
                   </div>
@@ -1004,7 +1007,7 @@ const Analysis: React.FC = () => {
                     <div className="flex gap-4 w-full justify-between">
                       <div className="text-xs">
                         <div className="text-zinc-400">Cash</div>
-                        <div className="font-semibold text-[#FFD700]">{formatHistorical(snapshotData.balanceSheet.totalCash, snapshotData.currency)}</div>
+                        <div className="font-semibold text-[#eaca6a]">{formatHistorical(snapshotData.balanceSheet.totalCash, snapshotData.currency)}</div>
                       </div>
                       <div className="text-xs">
                         <div className="text-zinc-400">Assets</div>
@@ -1020,11 +1023,11 @@ const Analysis: React.FC = () => {
 
                 {/* Hero: Freedom Date */}
                 <StatCard
-                  title="Financial Freedom"
+                  title="Freedom Date"
                   value={
                     snapshotData.financialHealth.freedomDate === 'Achieved' ?
-                      <span className="text-[#FFD700]">ACHIEVED</span> :
-                      (snapshotData.financialHealth.freedomDate || 'Not Projected')
+                      <span className="text-[#eaca6a]">ACHIEVED</span> :
+                      formatFreedomDate(snapshotData.financialHealth.freedomDate)
                   }
                   subValue={
                     snapshotData.financialHealth.freedomDate !== 'Achieved' && snapshotData.financialHealth.freedomDate ?
@@ -1040,11 +1043,11 @@ const Analysis: React.FC = () => {
                   <div className="mt-4 flex items-center gap-3">
                     <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
                       <div
-                        className={`h-full ${snapshotData.financialHealth.freedomDate ? 'bg-green-500' : 'bg-zinc-700'}`}
+                        className={`h-full ${snapshotData.financialHealth.freedomDate ? 'bg-[#41d288]' : 'bg-zinc-700'}`}
                         style={{ width: `${Math.min(parseFloat(snapshotData.ratios.passiveCoverageRatio), 100)}%` }}
                       />
                     </div>
-                    <span className={`text-xs font-bold ${snapshotData.financialHealth.freedomDate !== 'No Passive Income' ? 'text-green-400' : 'text-zinc-600'}`}>
+                    <span className={`text-xs font-bold ${snapshotData.financialHealth.freedomDate !== 'No Passive Income' ? 'text-[#41d288]' : 'text-zinc-600'}`}>
                       {snapshotData.financialHealth.freedomDate === 'No Passive Income' ? 'NEEDS DATA' : 'ON TRACK'}
                     </span>
                   </div>
@@ -1055,7 +1058,7 @@ const Analysis: React.FC = () => {
                   <StatCard
                     title="Wealth Velocity"
                     value={
-                      <span className={snapshotData.richFlowMetrics.wealthVelocity >= 0 ? 'text-green-400' : 'text-red-400'}>
+                      <span className={snapshotData.richFlowMetrics.wealthVelocity >= 0 ? 'text-[#41d288]' : 'text-[#ff7d7e]'}>
                         {snapshotData.richFlowMetrics.wealthVelocity >= 0 ? '+' : ''}
                         {formatHistorical(snapshotData.richFlowMetrics.wealthVelocity, snapshotData.currency)}
                       </span>
@@ -1073,8 +1076,8 @@ const Analysis: React.FC = () => {
                   >
                     <div className="mt-2 h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
                       <div
-                        className={`h-full ${snapshotData.richFlowMetrics.solvencyRatio < 30 ? 'bg-green-500' :
-                          snapshotData.richFlowMetrics.solvencyRatio < 60 ? 'bg-yellow-500' : 'bg-red-500'
+                        className={`h-full ${snapshotData.richFlowMetrics.solvencyRatio < 30 ? 'bg-[#41d288]' :
+                          snapshotData.richFlowMetrics.solvencyRatio < 60 ? 'bg-[#eaca6a]' : 'bg-[#ff7d7e]'
                           }`}
                         style={{ width: `${Math.min(snapshotData.richFlowMetrics.solvencyRatio, 100)}%` }}
                       />
@@ -1088,7 +1091,7 @@ const Analysis: React.FC = () => {
                   <StatCard
                     title="Net Cashflow"
                     value={
-                      <span className={snapshotData.cashflow.netCashflow >= 0 ? 'text-green-400' : 'text-red-400'}>
+                      <span className={snapshotData.cashflow.netCashflow >= 0 ? 'text-[#41d288]' : 'text-[#ff7d7e]'}>
                         {formatHistorical(snapshotData.cashflow.netCashflow, snapshotData.currency)}
                       </span>
                     }
@@ -1099,15 +1102,15 @@ const Analysis: React.FC = () => {
                     <div className="mt-2 text-sm">
                       <div className="flex justify-between items-center">
                         <div className="text-zinc-400">Total Income</div>
-                        <div className="text-green-400 font-semibold">{formatHistorical(snapshotData.cashflow.totalIncome, snapshotData.currency)}</div>
+                        <div className="text-[#41d288] font-semibold">{formatHistorical(snapshotData.cashflow.totalIncome, snapshotData.currency)}</div>
                       </div>
                       <div className="flex justify-between items-center mt-1">
                         <div className="text-zinc-400">Total Expenses</div>
-                        <div className="text-red-400 font-semibold">{formatHistorical(snapshotData.cashflow.totalExpenses, snapshotData.currency)}</div>
+                        <div className="text-[#ff7d7e] font-semibold">{formatHistorical(snapshotData.cashflow.totalExpenses, snapshotData.currency)}</div>
                       </div>
                       <div className="my-2 h-px bg-white/5" />
                       <div className="text-xs text-zinc-500">
-                        Savings Rate: <span className={`${parseFloat(snapshotData.ratios.savingsRate) >= 0 ? 'text-green-400' : 'text-red-400'} font-bold`}>{snapshotData.ratios.savingsRate}%</span>
+                        Savings Rate: <span className={`${parseFloat(snapshotData.ratios.savingsRate) >= 0 ? 'text-[#41d288]' : 'text-[#ff7d7e]'} font-bold`}>{snapshotData.ratios.savingsRate}%</span>
                       </div>
                     </div>
                   </StatCard>
@@ -1251,9 +1254,9 @@ const Analysis: React.FC = () => {
                   title={snapshotData.richFlowMetrics.freedomGap > 0 ? "Freedom Gap" : "Financial Freedom"}
                   value={
                     snapshotData.richFlowMetrics.freedomGap <= 0 ? (
-                      <span className="text-[#FFD700] font-bold">ACHIEVED</span>
+                      <span className="text-[#eaca6a] font-bold">ACHIEVED</span>
                     ) : (
-                      <span className="text-orange-400">
+                      <span className="text-[#ff7d7e]">
                         -{formatHistorical(Math.abs(snapshotData.richFlowMetrics.freedomGap), snapshotData.currency)}
                       </span>
                     )
@@ -1280,10 +1283,10 @@ const Analysis: React.FC = () => {
 
             {trajectoryMetrics && snapshotData && (
               <>
-                <div className="max-w-7xl mx-auto mb-6 rounded-2xl bg-linear-to-br from-zinc-900/80 to-zinc-900/60 border border-[#FFD700]/20 p-6">
+                <div className="max-w-7xl mx-auto mb-6 rounded-2xl bg-linear-to-br from-zinc-900/80 to-zinc-900/60 border border-[#eaca6a]/20 p-6">
                   <div className="flex items-center justify-between mb-6">
                     <div>
-                      <h2 className="text-xl font-bold text-[#FFD700] flex items-center gap-2">
+                      <h2 className="text-xl font-bold text-[#eaca6a] flex items-center gap-2">
                         <span>Financial Velocity & Freedom Trajectory</span>
                       </h2>
                       <p className="text-xs text-zinc-400 mt-1">
@@ -1297,7 +1300,7 @@ const Analysis: React.FC = () => {
                     <StatCard
                       title="Freedom Gap Evolution"
                       value={
-                        <span className={trajectoryMetrics.freedomGap.end <= 0 ? 'text-green-400' : 'text-orange-400'}>
+                        <span className={trajectoryMetrics.freedomGap.end <= 0 ? 'text-[#41d288]' : 'text-[#ff7d7e]'}>
                           {trajectoryMetrics.freedomGap.end <= 0 ? 0 : formatCurrencyValue(trajectoryMetrics.freedomGap.end, user?.preferredCurrency)}
                         </span>
                       }
@@ -1340,7 +1343,7 @@ const Analysis: React.FC = () => {
                     {/* 1. The Rat Race Escape */}
                     <div className="p-3 md:p-6 rounded-xl bg-zinc-900/50 border border-white/5">
                       <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-2 md:mb-4 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-green-400"></span>
+                        <span className="w-2 h-2 rounded-full bg-[#41d288]"></span>
                         The Rat Race Escape
                       </h3>
                       <div className="w-full h-80 chart-container-responsive" style={{ width: '100%', height: 320, minHeight: 320, position: 'relative' }}>
@@ -1348,16 +1351,16 @@ const Analysis: React.FC = () => {
                           <ComposedChart data={processedTrajectory} margin={{ top: 5, right: 20, bottom: 60, left: 10 }}>
                             <defs>
                               <linearGradient id="colorPassive" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#4ade80" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#4ade80" stopOpacity={0} />
+                                <stop offset="5%" stopColor="#41d288" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#41d288" stopOpacity={0} />
                               </linearGradient>
                               <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#f87171" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
+                                <stop offset="5%" stopColor="#ff7d7e" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#ff7d7e" stopOpacity={0} />
                               </linearGradient>
                               <linearGradient id="colorSurplus" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#4ade80" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#4ade80" stopOpacity={0} />
+                                <stop offset="5%" stopColor="#41d288" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#41d288" stopOpacity={0} />
                               </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
@@ -1377,8 +1380,8 @@ const Analysis: React.FC = () => {
                             />
                             <RechartsTooltip content={<ChartTooltip />} />
                             <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px', fontSize: '12px' }} verticalAlign="bottom" />
-                            <Line type="monotone" dataKey="totalExpenses" name="Expenses" stroke="#f87171" strokeWidth={2} dot={false} />
-                            <Line type="monotone" dataKey="combinedPassiveIncome" name="Passive + Portfolio Income" stroke="#4ade80" strokeWidth={2} dot={false} />
+                            <Line type="monotone" dataKey="totalExpenses" name="Expenses" stroke="#ff7d7e" strokeWidth={2} dot={false} />
+                            <Line type="monotone" dataKey="combinedPassiveIncome" name="Passive + Portfolio Income" stroke="#41d288" strokeWidth={2} dot={false} />
 
 
                             {/* Crossover Point */}
@@ -1386,14 +1389,14 @@ const Analysis: React.FC = () => {
                               const prev = processedTrajectory[idx - 1];
                               if (idx > 0 && p.combinedPassiveIncome >= p.totalExpenses && prev.combinedPassiveIncome < prev.totalExpenses) {
                                 return (
-                                  <ReferenceDot key={p.date} x={p.date} y={p.combinedPassiveIncome} r={6} fill="#4ade80" stroke="#18181b" />
+                                  <ReferenceDot key={p.date} x={p.date} y={p.combinedPassiveIncome} r={6} fill="#41d288" stroke="#18181b" />
                                 );
                               }
                               return null;
                             })}
 
                             {processedTrajectory.filter(p => p.currencyChanged).map(p => (
-                              <ReferenceLine key={`cur-rr-${p.date}`} x={p.date} stroke="#FFD700" strokeDasharray="4 2" label={{ value: p.currency, position: 'top', fill: '#FFD700', fontSize: 10 }} />
+                              <ReferenceLine key={`cur-rr-${p.date}`} x={p.date} stroke="#eaca6a" strokeDasharray="4 2" label={{ value: p.currency, position: 'top', fill: '#eaca6a', fontSize: 10 }} />
                             ))}
                           </ComposedChart>
                         </ResponsiveContainer>
@@ -1403,7 +1406,7 @@ const Analysis: React.FC = () => {
                     {/* 2. Net Worth & Velocity */}
                     <div className="p-3 md:p-6 rounded-xl bg-zinc-900/50 border border-white/5">
                       <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-2 md:mb-4 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-[#FFD700]"></span>
+                        <span className="w-2 h-2 rounded-full bg-[#eaca6a]"></span>
                         Net Worth & Velocity
                       </h3>
                       <div className="w-full h-80 chart-container-responsive" style={{ width: '100%', height: 320, minHeight: 320, position: 'relative' }}>
@@ -1411,8 +1414,8 @@ const Analysis: React.FC = () => {
                           <ComposedChart data={processedTrajectory} margin={{ top: 5, right: 20, bottom: 60, left: 10 }}>
                             <defs>
                               <linearGradient id="colorNetWorth" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#FFD700" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#FFD700" stopOpacity={0} />
+                                <stop offset="5%" stopColor="#eaca6a" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#eaca6a" stopOpacity={0} />
                               </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
@@ -1425,26 +1428,26 @@ const Analysis: React.FC = () => {
                             />
                             <YAxis
                               yAxisId="left"
-                              stroke="#FFD700"
+                              stroke="#eaca6a"
                               tickFormatter={(val) => `$${val / 1000}k`}
-                              tick={{ fontSize: 12, fill: '#FFD700' }}
+                              tick={{ fontSize: 12, fill: '#eaca6a' }}
                               style={{ background: 'none' }}
                               domain={['auto', 'auto']}
                             />
                             <YAxis
                               yAxisId="right"
                               orientation="right"
-                              stroke="#c084fc"
+                              stroke="#794cb5"
                               tickFormatter={(val) => `${val.toFixed(1)}%`}
                               tick={{ fontSize: 12 }}
                               domain={['auto', 'auto']}
                             />
                             <RechartsTooltip content={<ChartTooltip />} />
                             <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px', fontSize: '12px' }} verticalAlign="bottom" />
-                            <Line yAxisId="left" type="monotone" dataKey="netWorth" name="Net Worth" stroke="#FFD700" strokeWidth={2} dot={false} />
-                            <Bar yAxisId="right" dataKey="netWorthDelta" name="Wealth Velocity" fill="#c084fc" radius={[4, 4, 0, 0]} />
+                            <Line yAxisId="left" type="monotone" dataKey="netWorth" name="Net Worth" stroke="#eaca6a" strokeWidth={2} dot={false} />
+                            <Bar yAxisId="right" dataKey="netWorthDelta" name="Wealth Velocity" fill="#794cb5" radius={[4, 4, 0, 0]} />
                             {processedTrajectory.filter(p => p.currencyChanged).map(p => (
-                              <ReferenceLine key={`cur-nw-${p.date}`} x={p.date} stroke="#FFD700" strokeDasharray="4 2" />
+                              <ReferenceLine key={`cur-nw-${p.date}`} x={p.date} stroke="#eaca6a" strokeDasharray="4 2" />
                             ))}
                           </ComposedChart>
                         </ResponsiveContainer>
@@ -1454,7 +1457,7 @@ const Analysis: React.FC = () => {
                     {/* 3. Asset Efficiency Trend */}
                     <div className="p-3 md:p-6 rounded-xl bg-zinc-900/50 border border-white/5">
                       <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-2 md:mb-4 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                        <span className="w-2 h-2 rounded-full bg-[#794cb5]"></span>
                         Asset Efficiency (ROA)
                       </h3>
                       <div className="w-full h-80 chart-container-responsive" style={{ width: '100%', height: 320, minHeight: 320, position: 'relative' }}>
@@ -1462,8 +1465,8 @@ const Analysis: React.FC = () => {
                           <LineChart data={processedTrajectory} margin={{ top: 5, right: 20, bottom: 60, left: 10 }}>
                             <defs>
                               <linearGradient id="colorEfficiency" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#60a5fa" stopOpacity={0} />
+                                <stop offset="5%" stopColor="#794cb5" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#794cb5" stopOpacity={0} />
                               </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
@@ -1483,9 +1486,9 @@ const Analysis: React.FC = () => {
                             />
                             <RechartsTooltip content={<ChartTooltip />} />
                             <Legend iconSize={10} wrapperStyle={{ paddingTop: '10px', fontSize: '12px' }} verticalAlign="bottom" />
-                            <Line type="monotone" dataKey="assetEfficiency" name="Return on Assets" stroke="#60a5fa" strokeWidth={2} dot={false} />
+                            <Line type="monotone" dataKey="assetEfficiency" name="Return on Assets" stroke="#794cb5" strokeWidth={2} dot={false} />
                             {processedTrajectory.filter(p => p.currencyChanged).map(p => (
-                              <ReferenceLine key={`cur-roa-${p.date}`} x={p.date} stroke="#FFD700" strokeDasharray="4 2" />
+                              <ReferenceLine key={`cur-roa-${p.date}`} x={p.date} stroke="#eaca6a" strokeDasharray="4 2" />
                             ))}
                           </LineChart>
                         </ResponsiveContainer>
@@ -1495,7 +1498,7 @@ const Analysis: React.FC = () => {
                     {/* 4. Quadrant Evolution */}
                     <div className="p-3 md:p-6 rounded-xl bg-zinc-900/50 border border-white/5">
                       <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider mb-2 md:mb-4 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+                        <span className="w-2 h-2 rounded-full bg-[#eaca6a]"></span>
                         Quadrant Evolution
                       </h3>
                       <div className="w-full h-80 chart-container-responsive" style={{ width: '100%', height: 320, minHeight: 320, position: 'relative' }}>
@@ -1523,7 +1526,7 @@ const Analysis: React.FC = () => {
                             <Area type="monotone" dataKey="quadrantPct.BUSINESS_OWNER" name="Business Owner" stackId="1" stroke={QUADRANT_COLORS.BUSINESS_OWNER} fill={QUADRANT_COLORS.BUSINESS_OWNER} />
                             <Area type="monotone" dataKey="quadrantPct.INVESTOR" name="Investor" stackId="1" stroke={QUADRANT_COLORS.INVESTOR} fill={QUADRANT_COLORS.INVESTOR} />
                             {processedTrajectory.filter(p => p.currencyChanged).map(p => (
-                              <ReferenceLine key={`cur-iq-${p.date}`} x={p.date} stroke="#FFD700" strokeDasharray="4 2" />
+                              <ReferenceLine key={`cur-iq-${p.date}`} x={p.date} stroke="#eaca6a" strokeDasharray="4 2" />
                             ))}
                           </AreaChart>
                         </ResponsiveContainer>
