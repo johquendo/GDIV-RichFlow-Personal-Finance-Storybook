@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { authAPI } from '../../utils/api';
 
 const Signup: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -61,24 +62,7 @@ const Signup: React.FC = () => {
       // This ensures user is fully logged out if they were previously authenticated
       await logout();
 
-      const response = await fetch('http://localhost:5000/api/auth/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // Include cookies to allow backend to clear refresh token
-        body: JSON.stringify({
-          name: formData.username,
-          email: formData.email,
-          password: formData.password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Signup failed');
-      }
+      const data = await authAPI.signup(formData.username, formData.email, formData.password);
 
       // Success - clear form and redirect to login
       console.log('User created successfully:', data.user);
