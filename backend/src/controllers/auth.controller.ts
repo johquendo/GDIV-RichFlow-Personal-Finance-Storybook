@@ -12,6 +12,7 @@ import {
 import { updateEmail, updatePassword } from '../services/auth.service';
 import { generateAccessToken } from '../utils/jwt.utils';
 import prisma from '../config/database.config';
+import { authenticateToken } from '../middleware/auth.middleware';
 
 /**
  * Handle user signup
@@ -95,7 +96,6 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 
     return res.status(200).json({
       message: 'Login successful',
-      accessToken,
       user: {
         id: user.id,
         email: user.email,
@@ -344,4 +344,3 @@ export async function updatePasswordHandler(req: Request, res: Response, next: N
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
-

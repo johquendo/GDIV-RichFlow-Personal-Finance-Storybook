@@ -58,3 +58,4 @@ export function verifyToken(token: string): { userId: number } | null {
 export function generateSessionExpiry(): Date {
   return getRefreshTokenExpiration();
 }
+
