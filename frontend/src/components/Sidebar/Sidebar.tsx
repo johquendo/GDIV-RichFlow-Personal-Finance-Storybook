@@ -35,7 +35,6 @@ const Sidebar: React.FC<Props> = ({ onOpenAssistant }) => {
       await logout();
       navigate('/');
     } catch (error) {
-      console.error('Logout error:', error);
       // Still navigate to landing page even if logout fails
       navigate('/');
     }

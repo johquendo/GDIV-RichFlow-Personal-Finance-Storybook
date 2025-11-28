@@ -251,7 +251,6 @@ const Analysis: React.FC = () => {
       setSnapshotData(data);
       if (!date) setSelectedDate('');
     } catch (error) {
-      console.error('Failed to fetch snapshot:', error);
       setSnapshotError(formatError(error));
     } finally {
       clearTimeout(slowTimer);
@@ -319,7 +318,6 @@ const Analysis: React.FC = () => {
       if (reqId !== compareReqIdRef.current) return; // stale
       setCompareResult({ start: startSnap, end: endSnap });
     } catch (e) {
-      console.error('Failed to fetch comparison report:', e);
       setCompareError(formatError(e));
     } finally {
       clearTimeout(slowTimer);
@@ -376,10 +374,8 @@ const Analysis: React.FC = () => {
         trajectoryEnd,
         trajectoryInterval
       );
-      console.log('Trajectory data loaded:', data?.length || 0, 'points');
       setTrajectoryData(data);
     } catch (e) {
-      console.error('Failed to fetch trajectory data:', e);
       setTrajectoryData([]);
     } finally {
       clearTimeout(slowTimer);
@@ -607,15 +603,7 @@ const Analysis: React.FC = () => {
     };
   }, [trajectoryData]);
 
-  // Debug log
-  useEffect(() => {
-    console.log('Chart render check:', {
-      hasMetrics: !!trajectoryMetrics,
-      hasSnapshotData: !!snapshotData,
-      trajectoryDataLength: trajectoryData?.length || 0,
-      processedLength: processedTrajectory?.length || 0
-    });
-  }, [trajectoryMetrics, snapshotData, trajectoryData, processedTrajectory]);
+
 
   // Timeline controller (date picker)
   const timelineController = (
