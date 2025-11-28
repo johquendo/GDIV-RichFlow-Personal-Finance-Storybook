@@ -22,11 +22,9 @@ const Sidebar: React.FC<Props> = ({ onOpenAssistant, mobileOpen = false, onToggl
   const dynamicPageRoute = isAnalysisPage ? '/dashboard' : '/analysis';
 
   const handleAssistantClick = () => {
-    if (isAnalysisPage) {
-      alert('Please go to the Dashboard to view AI Overview and Insights.');
-      return;
-    }
     if (onOpenAssistant) {
+      onOpenAssistant();
+      if (mobileOpen && onToggleSidebar) {
         onToggleSidebar();
       }
     }
