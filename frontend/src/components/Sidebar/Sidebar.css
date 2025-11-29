@@ -10,9 +10,9 @@
   overflow-y: auto;
   overflow-x: hidden;
   position: fixed;
-  top: 70px;
+  top: 68px;
   left: 1rem;
-  max-height: calc(100vh - 90px);
+  max-height: calc(100vh - 80px);
   z-index: 1100;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
   /* Dropdown animation */
@@ -31,22 +31,72 @@
   visibility: visible;
 }
 
-@media (max-width: 768px) {
-  .sidebar {
-    top: 60px;
-    left: 0.75rem;
-    width: 260px;
-    max-height: calc(100vh - 80px);
-  }
+/* User Info Section */
+.sidebar-user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-bottom: 1px solid #3a3a3a;
+  margin-bottom: 0.5rem;
+}
+
+.sidebar-user-avatar {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.sidebar-user-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.sidebar-user-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-user-name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #EDCA69;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-user-email {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 480px) {
   .sidebar {
-    top: 56px;
+    top: 64px;
     left: 0.5rem;
     right: 0.5rem;
     width: auto;
     max-height: calc(100vh - 70px);
+  }
+
+  .sidebar-user-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .sidebar-user-name {
+    font-size: 1rem;
+  }
+
+  .sidebar-user-email {
+    font-size: 0.75rem;
   }
 }
 

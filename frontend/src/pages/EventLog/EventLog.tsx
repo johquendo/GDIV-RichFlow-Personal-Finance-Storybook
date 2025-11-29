@@ -388,13 +388,10 @@ const EventLog: React.FC = () => {
               {filtered.map(ev => {
                 const ts = new Date(ev.timestamp);
                 // Updated to always show + or - explicitly
-                const changeFmt =
-                  (ev.valueChange >= 0 ? '+' : '-') + Math.abs(ev.valueChange).toLocaleString();
                 return (
                   <tr key={ev.id} className={`row-${ev.type.toLowerCase()}`}>
                     <td>
                       <div className="ts-main">{ts.toLocaleString()}</div>
-                      <div className="ts-sub">{ts.toISOString()}</div>
                     </td>
                     <td className="type-cell">
                       {/* Hide type badge for Starting Balance row */}

@@ -14,7 +14,7 @@ const Sidebar: React.FC<Props> = ({ onOpenAssistant, mobileOpen = false, onToggl
   const [showCurrencyModal, setShowCurrencyModal] = React.useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
 
   // Determine if we're on the analysis page
   const isAnalysisPage = location.pathname === '/analysis';
@@ -59,6 +59,17 @@ const Sidebar: React.FC<Props> = ({ onOpenAssistant, mobileOpen = false, onToggl
         className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}
       >
       
+      {/* User Info Section */}
+      <div className="sidebar-user-info">
+        <div className="sidebar-user-avatar">
+          <img src="/assets/richflow.png" alt="RichFlow Logo" className="sidebar-user-logo" />
+        </div>
+        <div className="sidebar-user-details">
+          <span className="sidebar-user-name">{user?.name}</span>
+          <span className="sidebar-user-email">{user?.email}</span>
+        </div>
+      </div>
+
       {/* Home Button */}
       <div className="sidebar-section">
         <button 
