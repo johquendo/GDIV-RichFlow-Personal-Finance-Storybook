@@ -445,7 +445,6 @@ function calculateSnapshotFromState(
   const qSelf = Number(quadrantTotals.SELF_EMPLOYED);
   const qBus = Number(quadrantTotals.BUSINESS_OWNER);
   const qInv = Number(quadrantTotals.INVESTOR);
-  const totalQuadrant = qEmployee + qSelf + qBus + qInv;
 
   const incomeQuadrantData = {
     EMPLOYEE: { amount: qEmployee, pct: totalIncome > 0 ? (qEmployee / totalIncome) * 100 : 0 },
@@ -618,7 +617,6 @@ async function getCurrentFinancialSnapshot(userId: number) {
   const qSelf = Number(quadrantTotals.SELF_EMPLOYED);
   const qBus = Number(quadrantTotals.BUSINESS_OWNER);
   const qInv = Number(quadrantTotals.INVESTOR);
-  const totalQ = qEmployee + qSelf + qBus + qInv;
 
   const incomeQuadrantData = {
     EMPLOYEE: { amount: qEmployee, pct: totalIncome > 0 ? (qEmployee / totalIncome) * 100 : 0 },

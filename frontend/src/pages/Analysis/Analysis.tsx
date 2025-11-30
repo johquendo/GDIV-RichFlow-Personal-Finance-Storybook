@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } from 'react';
 import Sidebar from '../../components/Sidebar/Sidebar';
-import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header/Header';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency } from '../../context/CurrencyContext';
@@ -58,12 +57,6 @@ type SnapshotData = {
     };
   };
   currency: { symbol: string; name: string };
-};
-
-type SavedSnapshot = {
-  id: string;
-  date: string;
-  data: SnapshotData;
 };
 
 type TrajectoryPoint = {
@@ -170,7 +163,6 @@ const StatCard: React.FC<{
 const Analysis: React.FC = () => {
   const { user } = useAuth();
   const { currency } = useCurrency();
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [slowSnapshot, setSlowSnapshot] = useState(false);
@@ -205,7 +197,6 @@ const Analysis: React.FC = () => {
 
   // Performance constants
   const SLOW_THRESHOLD_MS = 200;
-  const MAX_TRAJECTORY_POINTS = 1500;
 
   const formatError = (err: unknown): string => {
     if (!err) return 'Unknown error';
@@ -335,42 +326,6 @@ const Analysis: React.FC = () => {
       setCompareLoading(false);
     }
   };
-
-  // Downsampling (simple bucket average)
-  const downsample = useCallback((data: TrajectoryPoint[], max: number): TrajectoryPoint[] => {
-    if (data.length <= max) return data;
-    const bucketSize = data.length / max;
-    const result: TrajectoryPoint[] = [];
-    for (let i = 0; i < max; i++) {
-      const start = Math.floor(i * bucketSize);
-      const end = Math.min(Math.floor((i + 1) * bucketSize), data.length);
-      const slice = data.slice(start, end);
-      if (!slice.length) continue;
-      const mid = slice[Math.floor(slice.length / 2)];
-      const sum = (key: keyof TrajectoryPoint) => slice.reduce((acc, p) => acc + (p[key] as number), 0);
-      result.push({
-        date: mid.date,
-        netWorth: sum('netWorth') / slice.length,
-        netWorthDelta: sum('netWorthDelta') / slice.length,
-        passiveIncome: sum('passiveIncome') / slice.length,
-        portfolioIncome: sum('portfolioIncome') / slice.length,
-        totalExpenses: sum('totalExpenses') / slice.length,
-        freedomGap: sum('freedomGap') / slice.length,
-        wealthVelocity: sum('wealthVelocity') / slice.length,
-        assetEfficiency: sum('assetEfficiency') / slice.length,
-        netCashflow: sum('netCashflow') / slice.length,
-        totalIncome: sum('totalIncome') / slice.length,
-        incomeQuadrant: {
-          EMPLOYEE: slice.reduce((a, p) => a + p.incomeQuadrant.EMPLOYEE, 0) / slice.length,
-          SELF_EMPLOYED: slice.reduce((a, p) => a + p.incomeQuadrant.SELF_EMPLOYED, 0) / slice.length,
-          BUSINESS_OWNER: slice.reduce((a, p) => a + p.incomeQuadrant.BUSINESS_OWNER, 0) / slice.length,
-          INVESTOR: slice.reduce((a, p) => a + p.incomeQuadrant.INVESTOR, 0) / slice.length,
-        },
-        currency: mid.currency
-      });
-    }
-    return result;
-  }, []);
 
   const fetchTrajectoryData = async () => {
     if (!trajectoryStart || !trajectoryEnd) return;
@@ -647,10 +602,6 @@ const Analysis: React.FC = () => {
       >Compare</button>
     </div>
   );
-
-  const handleJumpToSnapshot = (date: string) => {
-    setSelectedDate(date);
-  };
 
   const ChartTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || payload.length === 0) return null;

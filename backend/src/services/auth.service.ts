@@ -2,7 +2,6 @@ import prisma from '../config/database.config';
 import { Prisma } from '@prisma/client';
 import { hashPassword, comparePassword } from '../utils/password.utils';
 import { generateRefreshToken, getRefreshTokenExpiration } from '../utils/jwt.utils';
-import { createEvent } from './event.service';
 import { ActionType, EntityType } from '../types/event.types';
 
 interface CreateUserData {

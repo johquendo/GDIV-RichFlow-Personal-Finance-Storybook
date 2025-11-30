@@ -12,7 +12,6 @@ import {
 import { updateEmail, updatePassword } from '../services/auth.service';
 import { generateAccessToken } from '../utils/jwt.utils';
 import prisma from '../config/database.config';
-import { authenticateToken } from '../middleware/auth.middleware';
 
 /**
  * Handle user signup

@@ -193,7 +193,7 @@ export const authAPI = {
 
     // Store access token in memory
     setAccessToken(data.accessToken);
-    
+
     // Set session flag for future refresh attempts
     setSessionFlag(true);
 
@@ -259,7 +259,7 @@ export const authAPI = {
       broadcastAuthChanged();
     }
   },
-  
+
   // Update username (persisted)
   updateUsername: async (name: string) => {
     return await apiRequest('/auth/username', {
@@ -496,8 +496,8 @@ export const analysisAPI = {
   },
 
   getFinancialTrajectory: async (
-    startDate: string, 
-    endDate: string, 
+    startDate: string,
+    endDate: string,
     interval: 'daily' | 'weekly' | 'monthly' = 'monthly'
   ) => {
     const url = `/analysis/trajectory?startDate=${startDate}&endDate=${endDate}&interval=${interval}`;
@@ -555,6 +555,7 @@ export const eventLogsAPI = {
     endDate?: string;
     limit?: number;
     offset?: number;
+    search?: string;
   }) => {
     const queryParams = new URLSearchParams();
     if (params?.entityType) queryParams.append('entityType', params.entityType);
@@ -562,10 +563,11 @@ export const eventLogsAPI = {
     if (params?.endDate) queryParams.append('endDate', params.endDate);
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.offset) queryParams.append('offset', params.offset.toString());
-    
+    if (params?.search) queryParams.append('search', params.search);
+
     const queryString = queryParams.toString();
     const endpoint = queryString ? `/events?${queryString}` : '/events';
-    
+
     return await apiRequest(endpoint, {
       method: 'GET',
       requiresAuth: true,

@@ -40,20 +40,6 @@ const normalizeQuadrant = (value: any, fallback: IncomeQuadrant): IncomeQuadrant
   return fallback;
 };
 
-const formatQuadrantLabel = (quadrant?: IncomeQuadrant) => {
-  switch (quadrant) {
-    case 'SELF_EMPLOYED':
-      return 'Self-Employed';
-    case 'BUSINESS_OWNER':
-      return 'Business Owner';
-    case 'INVESTOR':
-      return 'Investor';
-    case 'EMPLOYEE':
-    default:
-      return 'Employee';
-  }
-};
-
 const IncomeSection: React.FC = () => {
   const { user } = useAuth();
   const { currency } = useCurrency();

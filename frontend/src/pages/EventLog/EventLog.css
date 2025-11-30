@@ -62,7 +62,8 @@
   flex-direction: column;
   gap: 1.2rem;
   margin-bottom: 1.5rem;
-  position: relative; /* for layout stability */
+  position: relative;
+  /* for layout stability */
 }
 
 /* Back button styled to match theme */
@@ -99,8 +100,9 @@
   font-size: 1.9rem;
   font-weight: 700;
   text-align: center;
-  background: linear-gradient(90deg,#7345AF,#EDCA69);
+  background: linear-gradient(90deg, #7345AF, #EDCA69);
   -webkit-background-clip: text;
+  background-clip: text;
   color: transparent;
   letter-spacing: .5px;
 }
@@ -110,8 +112,8 @@
   flex-wrap: wrap;
   gap: 0.9rem;
   align-items: flex-end;
-  background: linear-gradient(135deg, rgba(115,69,175,0.12), rgba(157,109,212,0.08));
-  border: 1px solid rgba(115,69,175,0.25);
+  background: linear-gradient(135deg, rgba(115, 69, 175, 0.12), rgba(157, 109, 212, 0.08));
+  border: 1px solid rgba(115, 69, 175, 0.25);
   padding: 1rem 1.25rem;
   border-radius: 12px;
 }
@@ -151,6 +153,7 @@
 }
 
 @media (max-width: 768px) {
+
   .filter-group select,
   .filter-group input {
     padding: 0.75rem 0.875rem;
@@ -176,7 +179,7 @@
 
 .clear-btn {
   align-self: auto;
-  background: linear-gradient(135deg,#7345AF,#9d6dd4);
+  background: linear-gradient(135deg, #7345AF, #9d6dd4);
   border: none;
   color: #fff;
   font-weight: 600;
@@ -196,7 +199,7 @@
 
 .clear-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(115,69,175,0.45);
+  box-shadow: 0 6px 16px rgba(115, 69, 175, 0.45);
 }
 
 @media (max-width: 768px) {
@@ -229,6 +232,14 @@
   border-color: #664000;
 }
 
+.status-msg-small {
+  text-align: center;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  color: #c69df7;
+  opacity: 0.8;
+}
+
 .status-empty {
   margin: 2.5rem auto;
   font-size: 1.15rem;
@@ -248,7 +259,7 @@
 }
 
 .event-table thead {
-  background: linear-gradient(90deg,#7345AF,#9d6dd4);
+  background: linear-gradient(90deg, #7345AF, #9d6dd4);
 }
 
 .event-table th {
@@ -259,7 +270,7 @@
   font-size: 0.75rem;
   color: #fff;
   text-transform: uppercase;
-  border-bottom: 1px solid rgba(255,255,255,0.15);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .event-table th.col-change {
@@ -272,7 +283,7 @@
 }
 
 .event-table tbody tr:hover {
-  background: rgba(115,69,175,0.15);
+  background: rgba(115, 69, 175, 0.15);
 }
 
 .event-table td {
@@ -302,20 +313,40 @@
   color: #fff;
 }
 
-.badge-income { background: linear-gradient(90deg,#2e8bff,#78b5ff); }
-.badge-expense { background: linear-gradient(90deg,#dc3545,#ff6b6b); }
-.badge-asset { background: linear-gradient(90deg,#28a745,#5cb85c); }
-.badge-liability { background: linear-gradient(90deg,#ff7b7b,#ffb0b0); }
-.badge-cash-savings { background: linear-gradient(90deg,#ffc107,#ffdd57); }
+.badge-income {
+  background: linear-gradient(90deg, #2e8bff, #78b5ff);
+}
+
+.badge-expense {
+  background: linear-gradient(90deg, #dc3545, #ff6b6b);
+}
+
+.badge-asset {
+  background: linear-gradient(90deg, #28a745, #5cb85c);
+}
+
+.badge-liability {
+  background: linear-gradient(90deg, #ff7b7b, #ffb0b0);
+}
+
+.badge-cash-savings {
+  background: linear-gradient(90deg, #ffc107, #ffdd57);
+}
 
 .change-cell {
   font-weight: 700;
   font-size: 0.8rem;
-  text-align: center; /* ensure values center under the header */
+  text-align: center;
+  /* ensure values center under the header */
 }
 
-.change-cell.pos { color: #28a745; }
-.change-cell.neg { color: #ff6b6b; }
+.change-cell.pos {
+  color: #28a745;
+}
+
+.change-cell.neg {
+  color: #ff6b6b;
+}
 
 .desc-cell {
   max-width: 480px;
@@ -335,109 +366,119 @@
     flex-direction: column;
     align-items: stretch;
   }
-  .filter-group { min-width: unset; }
-  .event-table th, .event-table td { padding: 0.6rem 0.65rem; }
-  .desc-cell { max-width: 100%; }
+
+  .filter-group {
+    min-width: unset;
+  }
+
+  .event-table th,
+  .event-table td {
+    padding: 0.6rem 0.65rem;
+  }
+
+  .desc-cell {
+    max-width: 100%;
+  }
 }
 
 @media (max-width: 768px) {
-  .event-log-page { 
-    padding: 1rem; 
+  .event-log-page {
+    padding: 1rem;
   }
-  
+
   .event-log-header {
     gap: 1rem;
     margin-bottom: 1.25rem;
   }
-  
-  .event-log-title { 
-    font-size: 1.75rem; 
+
+  .event-log-title {
+    font-size: 1.75rem;
   }
-  
-  .event-log-filters { 
+
+  .event-log-filters {
     padding: 1rem 1.25rem;
     gap: 1rem;
   }
-  
+
   .filter-group label {
     font-size: 0.75rem;
   }
-  
+
   .search-group {
     min-width: 100%;
   }
-  
-  .event-table { 
+
+  .event-table {
     font-size: 0.875rem;
     border-radius: 8px;
   }
-  
+
   .event-table th {
     padding: 0.875rem 0.75rem;
     font-size: 0.8rem;
   }
-  
+
   .event-table td {
     padding: 0.875rem 0.75rem;
   }
-  
-  .ts-main { 
-    font-size: 0.85rem; 
+
+  .ts-main {
+    font-size: 0.85rem;
   }
-  
+
   .type-cell .badge {
     padding: 0.35rem 0.65rem;
     font-size: 0.7rem;
   }
-  
+
   .change-cell {
     font-size: 0.875rem;
   }
 }
 
 @media (max-width: 640px) {
-  .event-log-page { 
-    padding: 0.75rem; 
+  .event-log-page {
+    padding: 0.75rem;
   }
-  
-  .event-log-title { 
-    font-size: 1.5rem; 
+
+  .event-log-title {
+    font-size: 1.5rem;
   }
-  
-  .event-log-filters { 
+
+  .event-log-filters {
     padding: 1rem;
   }
-  
-  .event-table { 
-    font-size: 0.8rem; 
+
+  .event-table {
+    font-size: 0.8rem;
   }
-  
+
   .event-table th {
     padding: 0.75rem 0.5rem;
     font-size: 0.7rem;
   }
-  
+
   .event-table td {
     padding: 0.75rem 0.5rem;
   }
-  
-  .ts-main { 
-    font-size: 0.75rem; 
+
+  .ts-main {
+    font-size: 0.75rem;
   }
-  
-  .ts-sub { 
-    display: none; 
+
+  .ts-sub {
+    display: none;
   }
-  
+
   .type-cell .badge {
     padding: 0.3rem 0.5rem;
     font-size: 0.65rem;
   }
-  
+
   .change-cell {
     font-size: 0.8rem;
   }
-  
+
   .desc-cell {
     font-size: 0.8rem;
     line-height: 1.4;
@@ -445,23 +486,23 @@
 }
 
 @media (max-width: 480px) {
-  .event-log-page { 
-    padding: 0.5rem; 
+  .event-log-page {
+    padding: 0.5rem;
   }
-  
+
   .event-log-filters {
     padding: 0.875rem;
   }
-  
+
   .event-table {
     font-size: 0.75rem;
   }
-  
+
   .event-table th {
     padding: 0.625rem 0.375rem;
     font-size: 0.65rem;
   }
-  
+
   .event-table td {
     padding: 0.625rem 0.375rem;
   }
