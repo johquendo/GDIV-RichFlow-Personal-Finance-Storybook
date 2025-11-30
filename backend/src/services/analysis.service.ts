@@ -4,6 +4,36 @@ import { getEventsByUser } from './event.service';
 import { EntityType, ActionType, Event } from '../types/event.types';
 
 /**
+ * Safely divides two numbers, ensuring the result is not NaN, Infinity, or based on a negative denominator for ratios.
+ * @param numerator The dividend.
+ * @param denominator The divisor.
+ * @param multiplier The final factor (e.g., 100 for percentage).
+ * @param absoluteDenominator Use absolute value of the denominator for trend/ratio calculations.
+ */
+const safeDivide = (
+  numerator: number,
+  denominator: number,
+  multiplier: number = 1,
+  absoluteDenominator: boolean = false
+): number => {
+  if (isNaN(numerator) || isNaN(denominator) || denominator === 0) {
+    return 0;
+  }
+
+  let divisor = denominator;
+  if (absoluteDenominator) {
+    divisor = Math.abs(denominator);
+  }
+
+  // Still check for zero after taking absolute value (or if it was zero initially)
+  if (divisor === 0) {
+    return 0;
+  }
+
+  return (numerator / divisor) * multiplier;
+};
+
+/**
  * Represents the reconstructed financial state at a point in time
  */
 interface FinancialState {
@@ -435,13 +465,11 @@ function calculateFinancialHealth(
   const currentNetCashflow = currentTotalIncome - currentExpenses;
 
   // 1. Runway: (Cash + Liquid Assets) / Monthly Expenses
-  const runway = currentExpenses > 0 ? currentCash / currentExpenses : (currentCash > 0 ? 999 : 0);
+  const runway = currentExpenses > 0 ? safeDivide(currentCash, currentExpenses) : (currentCash > 0 ? 999 : 0);
 
   // 2. Asset Efficiency: (Passive + Portfolio) / (Total Assets - Cash)
   // Note: In our state model, totalAssets excludes cash.
-  const assetEfficiency = currentTotalAssets > 0
-    ? ((currentPassiveIncome + currentPortfolioIncome) / currentTotalAssets) * 100
-    : 0;
+  const assetEfficiency = safeDivide(currentPassiveIncome + currentPortfolioIncome, currentTotalAssets, 100);
 
   // 3. Trends
   let netWorthTrend = 0;
@@ -457,15 +485,13 @@ function calculateFinancialHealth(
     const prevExpenses = Array.from(prevMonthState.expenses.values()).reduce((sum, e) => sum + e.amount, 0);
     const prevNetCashflow = prevIncome - prevExpenses;
 
-    if (prevNetWorth !== 0) {
-      netWorthTrend = ((currentNetWorth - prevNetWorth) / Math.abs(prevNetWorth)) * 100;
-    } else if (currentNetWorth !== 0) {
+    netWorthTrend = safeDivide(currentNetWorth - prevNetWorth, prevNetWorth, 100, true);
+    if (prevNetWorth === 0 && currentNetWorth !== 0) {
       netWorthTrend = currentNetWorth > 0 ? 100 : -100;
     }
 
-    if (prevNetCashflow !== 0) {
-      cashflowTrend = ((currentNetCashflow - prevNetCashflow) / Math.abs(prevNetCashflow)) * 100;
-    } else if (currentNetCashflow !== 0) {
+    cashflowTrend = safeDivide(currentNetCashflow - prevNetCashflow, prevNetCashflow, 100, true);
+    if (prevNetCashflow === 0 && currentNetCashflow !== 0) {
       cashflowTrend = currentNetCashflow > 0 ? 100 : -100;
     }
   }
@@ -586,8 +612,8 @@ function calculateSnapshotFromState(
 
   // Calculate ratios
   // Passive coverage now includes portfolio income since it also contributes to financial freedom
-  const passiveCoverageRatio = totalExpenses > 0 ? (combinedPassiveIncome / totalExpenses) * 100 : 0;
-  const savingsRate = totalIncome > 0 ? (netCashflow / totalIncome) * 100 : 0;
+  const passiveCoverageRatio = safeDivide(combinedPassiveIncome, totalExpenses, 100);
+  const savingsRate = safeDivide(netCashflow, totalIncome, 100);
 
   // --- RichFlow Metrics ---
 
@@ -602,9 +628,8 @@ function calculateSnapshotFromState(
     const prevNetWorth = prevAssets - prevLiabilities + prevCash;
 
     wealthVelocity = netWorth - prevNetWorth;
-    if (prevNetWorth !== 0) {
-      wealthVelocityPct = (wealthVelocity / Math.abs(prevNetWorth)) * 100;
-    } else if (netWorth !== 0) {
+    wealthVelocityPct = safeDivide(wealthVelocity, prevNetWorth, 100, true);
+    if (prevNetWorth === 0 && netWorth !== 0) {
       wealthVelocityPct = netWorth > 0 ? 100 : -100;
     }
   }
@@ -612,7 +637,7 @@ function calculateSnapshotFromState(
   // 2. Solvency Ratio (Liabilities / Assets)
   // Note: totalAssets in our state excludes cash, but for solvency we should include liquid assets (cash)
   const totalAssetsWithCash = totalAssets + totalCashBalance;
-  const solvencyRatio = totalAssetsWithCash > 0 ? (totalLiabilities / totalAssetsWithCash) * 100 : 0;
+  const solvencyRatio = safeDivide(totalLiabilities, totalAssetsWithCash, 100);
 
   // 3. Freedom Gap (Expenses - Combined Passive Income)
   // Portfolio income is included since it also generates income without active work
@@ -631,10 +656,10 @@ function calculateSnapshotFromState(
   const qInv = Number(quadrantTotals.INVESTOR);
 
   const incomeQuadrantData = {
-    EMPLOYEE: { amount: qEmployee, pct: totalIncome > 0 ? (qEmployee / totalIncome) * 100 : 0 },
-    SELF_EMPLOYED: { amount: qSelf, pct: totalIncome > 0 ? (qSelf / totalIncome) * 100 : 0 },
-    BUSINESS_OWNER: { amount: qBus, pct: totalIncome > 0 ? (qBus / totalIncome) * 100 : 0 },
-    INVESTOR: { amount: qInv, pct: totalIncome > 0 ? (qInv / totalIncome) * 100 : 0 },
+    EMPLOYEE: { amount: qEmployee, pct: safeDivide(qEmployee, totalIncome, 100) },
+    SELF_EMPLOYED: { amount: qSelf, pct: safeDivide(qSelf, totalIncome, 100) },
+    BUSINESS_OWNER: { amount: qBus, pct: safeDivide(qBus, totalIncome, 100) },
+    INVESTOR: { amount: qInv, pct: safeDivide(qInv, totalIncome, 100) },
     total: totalIncome
   };
 
@@ -759,8 +784,8 @@ async function getCurrentFinancialSnapshot(userId: number) {
 
   // Calculate ratios
   // Passive coverage now includes portfolio income since it also contributes to financial freedom
-  const passiveCoverageRatio = totalExpenses > 0 ? (combinedPassiveIncome / totalExpenses) * 100 : 0;
-  const savingsRate = totalIncome > 0 ? (netCashflow / totalIncome) * 100 : 0;
+  const passiveCoverageRatio = safeDivide(combinedPassiveIncome, totalExpenses, 100);
+  const savingsRate = safeDivide(netCashflow, totalIncome, 100);
 
   // --- RichFlow Metrics ---
 
@@ -775,16 +800,15 @@ async function getCurrentFinancialSnapshot(userId: number) {
     const prevNetWorth = prevAssets - prevLiabilities + prevCash;
 
     wealthVelocity = netWorth - prevNetWorth;
-    if (prevNetWorth !== 0) {
-      wealthVelocityPct = (wealthVelocity / Math.abs(prevNetWorth)) * 100;
-    } else if (netWorth !== 0) {
+    wealthVelocityPct = safeDivide(wealthVelocity, prevNetWorth, 100, true);
+    if (prevNetWorth === 0 && netWorth !== 0) {
       wealthVelocityPct = netWorth > 0 ? 100 : -100;
     }
   }
 
   // 2. Solvency Ratio (Liabilities / Assets)
   const totalAssetsWithCash = totalAssets + totalCashBalance;
-  const solvencyRatio = totalAssetsWithCash > 0 ? (totalLiabilities / totalAssetsWithCash) * 100 : 0;
+  const solvencyRatio = safeDivide(totalLiabilities, totalAssetsWithCash, 100);
 
   // 3. Freedom Gap (Expenses - Combined Passive Income)
   // Portfolio income is included since it also generates income without active work
@@ -803,10 +827,10 @@ async function getCurrentFinancialSnapshot(userId: number) {
   const qInv = Number(quadrantTotals.INVESTOR);
 
   const incomeQuadrantData = {
-    EMPLOYEE: { amount: qEmployee, pct: totalIncome > 0 ? (qEmployee / totalIncome) * 100 : 0 },
-    SELF_EMPLOYED: { amount: qSelf, pct: totalIncome > 0 ? (qSelf / totalIncome) * 100 : 0 },
-    BUSINESS_OWNER: { amount: qBus, pct: totalIncome > 0 ? (qBus / totalIncome) * 100 : 0 },
-    INVESTOR: { amount: qInv, pct: totalIncome > 0 ? (qInv / totalIncome) * 100 : 0 },
+    EMPLOYEE: { amount: qEmployee, pct: safeDivide(qEmployee, totalIncome, 100) },
+    SELF_EMPLOYED: { amount: qSelf, pct: safeDivide(qSelf, totalIncome, 100) },
+    BUSINESS_OWNER: { amount: qBus, pct: safeDivide(qBus, totalIncome, 100) },
+    INVESTOR: { amount: qInv, pct: safeDivide(qInv, totalIncome, 100) },
     total: totalIncome
   };
 
@@ -1174,12 +1198,10 @@ export const getFinancialTrajectory = async (
     const freedomGap = totalExpenses - combinedPassiveIncome;
 
     // Wealth Velocity = Net Cashflow / Net Worth (if positive net worth)
-    const wealthVelocity = netWorth > 0 ? (netCashflow / netWorth) : 0;
+    const wealthVelocity = safeDivide(netCashflow, netWorth);
 
     // Asset Efficiency = (Passive + Portfolio) / Total Invested Assets
-    const assetEfficiency = totalAssets > 0
-      ? ((passiveIncome + portfolioIncome) / totalAssets) * 100
-      : 0;
+    const assetEfficiency = safeDivide(passiveIncome + portfolioIncome, totalAssets, 100);
 
     // Income Quadrant Breakdown
     const quadrantTotals = createEmptyQuadrantTotals();
