@@ -129,6 +129,28 @@ export async function createUser(userData: CreateUserData): Promise<UserResponse
       }
     });
 
+    // Create initial "Day 0" FinancialSnapshot for the new user
+    // This serves as the starting point for monthly checkpoint strategy
+    const initialSnapshotData = {
+      assets: [],           // Empty array (serialized Map format)
+      liabilities: [],      // Empty array (serialized Map format)
+      incomeLines: [],      // Empty array (serialized Map format)
+      expenses: [],         // Empty array (serialized Map format)
+      cashSavings: 0,
+      currency: {
+        symbol: '$',        // Default to USD
+        name: 'USD'
+      }
+    };
+
+    await tx.financialSnapshot.create({
+      data: {
+        userId: newUser.id,
+        date: newUser.createdAt,
+        data: initialSnapshotData
+      }
+    });
+
     return newUser;
   });
 

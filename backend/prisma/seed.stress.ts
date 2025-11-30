@@ -12,6 +12,27 @@ const STRESS_USER = {
     createdAt: new Date('2020-01-01T00:00:00Z'),
 };
 
+/**
+ * Serialize state to JSON-compatible format for FinancialSnapshot
+ */
+function serializeStateForSnapshot(state: {
+    assets: Map<number, { id: number; name: string; value: number }>;
+    liabilities: Map<number, { id: number; name: string; value: number }>;
+    incomeLines: Map<number, { id: number; name: string; amount: number; type: string; quadrant?: string | null }>;
+    expenses: Map<number, { id: number; name: string; amount: number }>;
+    cashSavings: number;
+    currency: { symbol: string; name: string };
+}): any {
+    return {
+        assets: Array.from(state.assets.entries()),
+        liabilities: Array.from(state.liabilities.entries()),
+        incomeLines: Array.from(state.incomeLines.entries()),
+        expenses: Array.from(state.expenses.entries()),
+        cashSavings: state.cashSavings,
+        currency: state.currency
+    };
+}
+
 async function main() {
     console.log('🔥 Starting Stress Test User Seed...');
     console.log('📅 Date Range: Jan 2020 - Nov 2025');
@@ -107,10 +128,37 @@ async function main() {
     let currentDate = new Date(startDate);
 
     const eventsBatch: any[] = [];
+    const snapshotsBatch: any[] = [];
     const BATCH_SIZE = 2000;
     let totalEvents = 0;
 
-    console.log('🚀 Generating events...');
+    // Track financial state for snapshot generation
+    const financialState = {
+        assets: new Map<number, { id: number; name: string; value: number }>(),
+        liabilities: new Map<number, { id: number; name: string; value: number }>(),
+        incomeLines: new Map<number, { id: number; name: string; amount: number; type: string; quadrant?: string | null }>(),
+        expenses: new Map<number, { id: number; name: string; amount: number }>(),
+        cashSavings: 1000, // Initial cash savings
+        currency: { symbol: '$', name: 'USD' }
+    };
+
+    // Initialize expense in state
+    financialState.expenses.set(expense.id, {
+        id: expense.id,
+        name: 'Variable Expenses',
+        amount: 100
+    });
+
+    // Create initial "Day 0" snapshot for the stress user
+    await prisma.financialSnapshot.create({
+        data: {
+            userId: user.id,
+            date: STRESS_USER.createdAt,
+            data: serializeStateForSnapshot(financialState)
+        }
+    });
+
+    console.log('🚀 Generating events and monthly snapshots...');
 
     while (currentDate <= endDate) {
         const year = currentDate.getFullYear();
@@ -154,17 +202,38 @@ async function main() {
             }
         }
 
+        // Update financial state with current expense amount
+        financialState.expenses.set(expense.id, {
+            id: expense.id,
+            name: 'Variable Expenses',
+            amount: currentExpenseAmount
+        });
+
+        // Create a monthly snapshot at the end of this month (1st of next month)
+        const snapshotDate = new Date(Date.UTC(year, month + 1, 1, 0, 0, 0, 0));
+        snapshotsBatch.push({
+            userId: user.id,
+            date: snapshotDate,
+            data: serializeStateForSnapshot(financialState)
+        });
+
         // Move to next month
         currentDate.setMonth(currentDate.getMonth() + 1);
     }
 
-    // Flush remaining
+    // Flush remaining events
     if (eventsBatch.length > 0) {
         await prisma.event.createMany({ data: eventsBatch });
         totalEvents += eventsBatch.length;
     }
 
+    // Insert all monthly snapshots
+    if (snapshotsBatch.length > 0) {
+        await prisma.financialSnapshot.createMany({ data: snapshotsBatch });
+    }
+
     console.log(`\n\n✅ Finished! Total events generated: ${totalEvents}`);
+    console.log(`   Monthly snapshots created: ${snapshotsBatch.length + 1}`); // +1 for initial Day 0 snapshot
 
     // Update final expense amount in DB
     await prisma.expense.update({
