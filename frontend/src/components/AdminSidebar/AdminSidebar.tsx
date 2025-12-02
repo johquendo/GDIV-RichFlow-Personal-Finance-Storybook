@@ -1,7 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import './AdminSidebar.css';
 
 const AdminSidebar: React.FC = () => {
   const [expanded, setExpanded] = React.useState(false);

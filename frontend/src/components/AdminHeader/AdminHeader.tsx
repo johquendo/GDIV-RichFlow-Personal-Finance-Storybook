@@ -1,5 +1,4 @@
 import React from 'react';
-import './AdminHeader.css';
 
 const AdminHeader: React.FC = () => {
   return (
@@ -10,10 +9,10 @@ const AdminHeader: React.FC = () => {
           <span className="logo-text">RichFlow</span>
         </div>
       </div>
-      <div className="header-center">
-        <h1 className="header-title">Administrator Panel</h1>
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-5">
+        <h1 className="text-[clamp(1.25rem,3vw+0.5rem,2rem)] font-bold text-(--color-gold) m-0 whitespace-nowrap pointer-events-auto max-md:text-[1.1rem] max-sm:text-[1rem]">Administrator Panel</h1>
       </div>
-      <div className="header-right">
+      <div className="flex-1 flex justify-end z-1">
       </div>
     </header>
   );
