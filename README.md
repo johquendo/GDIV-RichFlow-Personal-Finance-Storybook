@@ -100,9 +100,8 @@ Your personal AI-powered financial advisor that analyzes your current income, ex
 | **TypeScript** | 5.9.3 | Type Safety |
 | **React Router DOM** | 6.30.1 | Client-side Routing |
 | **Recharts** | 3.4.1 | Data Visualization |
-| **Tailwind CSS** | 4.1.16 | Utility-first Styling |
-| **Webpack** | 5.102.1 | Module Bundler |
-| **Babel** | 7.28.5 | JavaScript Compiler |
+| **Tailwind CSS** | 4.1.16 | Component Styling (Exclusive) |
+| **Vite** | 7.2.6 | Build Tool & Dev Server |
 
 ### Backend
 
@@ -211,7 +210,7 @@ npm install
 echo "REACT_APP_API_URL=http://localhost:5000/api" > .env
 
 # Start development server
-npm start
+npm run dev
 ```
 
 #### 4. Access the Application
@@ -498,8 +497,9 @@ npm run seed-timemachine-broke    # Seed financial struggle scenario
 ### Frontend
 
 ```bash
-npm start                      # Start development server (port 3000)
-npm run build                  # Build for production
+npm run dev                    # Start Vite development server (port 3000)
+npm run build                  # Type-check and build for production (Vite/Rollup)
+npm run preview                # Preview the production build locally
 ```
 
 ### Database
