@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
-import * as path from 'path';
 import routes from './routes/index.js';
 import authRoutes from './routes/auth.routes.js';
 import cashSavingsRoutes from './routes/cashSavings.routes.js';
@@ -17,10 +16,7 @@ import analysisRoutes from './routes/analysis.routes.js';
 import { errorHandler } from './middleware/errorHandler.middleware.js';
 
 // Load environment variables from .env file
-dotenv.config({ 
-  path: path.resolve(__dirname, '../.env'),
-  override: true 
-});
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
