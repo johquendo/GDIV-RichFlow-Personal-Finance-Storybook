@@ -1,6 +1,5 @@
 import prisma from '../config/database.config.js';
-import pkg from '@prisma/client';
-const { Prisma } = pkg;
+import { Prisma } from '@prisma/client';
 import {
   CreateEventParams,
   EventQueryParams,

@@ -1,8 +1,6 @@
-import pkg from '@prisma/client';
-import type { PrismaClient as PrismaClientType } from '@prisma/client';
-
-const { PrismaClient } = pkg;
+import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import pg from 'pg';
 import dotenv from 'dotenv';
 
 // Load environment variables from .env file
@@ -16,25 +14,20 @@ if (!process.env.DATABASE_URL) {
  * Prisma Client Singleton
  * Prevents multiple instances of Prisma Client in development
  * 
- * Prisma 7 Migration: Uses driver adapters for database connections.
- * The @prisma/adapter-pg adapter handles PostgreSQL connections.
+ * Using Prisma with driver adapters for PostgreSQL
  */
-let prisma: PrismaClientType;
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 const createPrismaClient = () => {
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+  const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 };
 
-if (process.env.NODE_ENV === 'production') {
-  prisma = createPrismaClient();
-} else {
-  // In development, use a global variable to preserve the client across module reloads
-  const globalForPrisma = globalThis as unknown as { prisma: PrismaClientType };
-  if (!globalForPrisma.prisma) {
-    globalForPrisma.prisma = createPrismaClient();
-  }
-  prisma = globalForPrisma.prisma;
+const prisma = globalForPrisma.prisma ?? createPrismaClient();
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
 }
 
 export default prisma;
