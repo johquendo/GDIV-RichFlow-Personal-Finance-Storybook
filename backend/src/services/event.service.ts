@@ -1,5 +1,5 @@
 import prisma from '../config/database.config.js';
-import { Prisma } from '@prisma/client';
+import { Prisma, PrismaClient } from '../../generated/prisma/client.js';
 import {
   CreateEventParams,
   EventQueryParams,
@@ -8,11 +8,24 @@ import {
   EventData
 } from '../types/event.types.js';
 
+// Transaction client type for use in prisma.$transaction
+export type TransactionClient = Omit<
+  PrismaClient,
+  '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
+>;
+
 /**
  * Create an immutable event log
  * This function should be called automatically whenever a financial action occurs
+ * @param params - Event creation parameters
+ * @param tx - Optional transaction client for atomic operations
  */
-export async function createEvent(params: CreateEventParams) {
+export async function createEvent(
+  params: CreateEventParams,
+  tx?: TransactionClient
+) {
+  const db = tx ?? prisma;
+  
   try {
     const {
       actionType,
@@ -24,11 +37,7 @@ export async function createEvent(params: CreateEventParams) {
       entityId
     } = params;
 
-    // Serialize values to JSON strings - REMOVED, passing objects directly
-    // const beforeValueJson = beforeValue ? JSON.stringify(beforeValue) : null;
-    // const afterValueJson = afterValue ? JSON.stringify(afterValue) : null;
-
-    const event = await prisma.event.create({
+    const event = await db.event.create({
       data: {
         actionType,
         entityType,
@@ -225,44 +234,54 @@ export async function logExpenseEvent(
 
 /**
  * Helper function to log asset events
+ * @param tx - Optional transaction client for atomic operations
  */
 export async function logAssetEvent(
   actionType: ActionType,
   userId: number,
   entityId: number,
   beforeValue?: EventData,
-  afterValue?: EventData
+  afterValue?: EventData,
+  tx?: TransactionClient
 ) {
-  return await createEvent({
-    actionType,
-    entityType: EntityType.ASSET,
-    entitySubtype: null,
-    beforeValue: beforeValue || null,
-    afterValue: afterValue || null,
-    userId,
-    entityId
-  });
+  return await createEvent(
+    {
+      actionType,
+      entityType: EntityType.ASSET,
+      entitySubtype: null,
+      beforeValue: beforeValue || null,
+      afterValue: afterValue || null,
+      userId,
+      entityId
+    },
+    tx
+  );
 }
 
 /**
  * Helper function to log liability events
+ * @param tx - Optional transaction client for atomic operations
  */
 export async function logLiabilityEvent(
   actionType: ActionType,
   userId: number,
   entityId: number,
   beforeValue?: EventData,
-  afterValue?: EventData
+  afterValue?: EventData,
+  tx?: TransactionClient
 ) {
-  return await createEvent({
-    actionType,
-    entityType: EntityType.LIABILITY,
-    entitySubtype: null,
-    beforeValue: beforeValue || null,
-    afterValue: afterValue || null,
-    userId,
-    entityId
-  });
+  return await createEvent(
+    {
+      actionType,
+      entityType: EntityType.LIABILITY,
+      entitySubtype: null,
+      beforeValue: beforeValue || null,
+      afterValue: afterValue || null,
+      userId,
+      entityId
+    },
+    tx
+  );
 }
 
 /**

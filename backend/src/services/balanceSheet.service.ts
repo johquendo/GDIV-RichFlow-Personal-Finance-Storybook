@@ -1,5 +1,6 @@
 import prisma from '../config/database.config.js';
-import { logAssetEvent, logLiabilityEvent } from './event.service.js';
+import { Asset, Liability } from '../../generated/prisma/client.js';
+import { logAssetEvent, logLiabilityEvent, TransactionClient } from './event.service.js';
 import { ActionType } from '../types/event.types.js';
 
 interface AssetData {
@@ -76,49 +77,54 @@ export async function getAssets(userId: number) {
 
 /**
  * Add a new asset for a user
+ * Uses transaction to ensure atomicity between entity creation and event logging
  */
-export async function addAsset(userId: number, data: AssetData) {
-  // Get or create balance sheet
-  let balanceSheet = await prisma.balanceSheet.findFirst({
-    where: { userId }
-  });
-
-  if (!balanceSheet) {
-    balanceSheet = await prisma.balanceSheet.create({
-      data: { userId }
+export async function addAsset(userId: number, data: AssetData): Promise<Asset> {
+  return await prisma.$transaction(async (tx) => {
+    // Get or create balance sheet
+    let balanceSheet = await tx.balanceSheet.findFirst({
+      where: { userId }
     });
-  }
 
-  // Create asset
-  const newAsset = await prisma.asset.create({
-    data: {
-      name: data.name,
-      value: data.value,
-      bsId: balanceSheet.id
+    if (!balanceSheet) {
+      balanceSheet = await tx.balanceSheet.create({
+        data: { userId }
+      });
     }
+
+    // Create asset
+    const newAsset = await tx.asset.create({
+      data: {
+        name: data.name,
+        value: data.value,
+        bsId: balanceSheet.id
+      }
+    });
+
+    // Log the CREATE event within the same transaction
+    await logAssetEvent(
+      ActionType.CREATE,
+      userId,
+      newAsset.id,
+      undefined,
+      {
+        name: newAsset.name,
+        value: newAsset.value
+      },
+      tx as unknown as TransactionClient
+    );
+
+    return newAsset;
   });
-
-  // Log the CREATE event
-  await logAssetEvent(
-    ActionType.CREATE,
-    userId,
-    newAsset.id,
-    undefined,
-    {
-      name: newAsset.name,
-      value: newAsset.value
-    }
-  );
-
-  return newAsset;
 }
 
 /**
  * Update an asset
  * Verifies ownership before update
+ * Uses transaction to ensure atomicity between entity update and event logging
  */
-export async function updateAsset(userId: number, assetId: number, data: AssetData) {
-  // First verify ownership
+export async function updateAsset(userId: number, assetId: number, data: AssetData): Promise<Asset> {
+  // First verify ownership (outside transaction for fast-fail)
   const asset = await prisma.asset.findFirst({
     where: {
       id: assetId,
@@ -138,36 +144,40 @@ export async function updateAsset(userId: number, assetId: number, data: AssetDa
     value: asset.value
   };
 
-  // Update asset
-  const updatedAsset = await prisma.asset.update({
-    where: { id: assetId },
-    data: {
-      name: data.name,
-      value: data.value
-    }
+  return await prisma.$transaction(async (tx) => {
+    // Update asset
+    const updatedAsset = await tx.asset.update({
+      where: { id: assetId },
+      data: {
+        name: data.name,
+        value: data.value
+      }
+    });
+
+    // Log the UPDATE event within the same transaction
+    await logAssetEvent(
+      ActionType.UPDATE,
+      userId,
+      assetId,
+      beforeValue,
+      {
+        name: updatedAsset.name,
+        value: updatedAsset.value
+      },
+      tx as unknown as TransactionClient
+    );
+
+    return updatedAsset;
   });
-
-  // Log the UPDATE event
-  await logAssetEvent(
-    ActionType.UPDATE,
-    userId,
-    assetId,
-    beforeValue,
-    {
-      name: updatedAsset.name,
-      value: updatedAsset.value
-    }
-  );
-
-  return updatedAsset;
 }
 
 /**
  * Delete an asset
  * Verifies ownership before deletion
+ * Uses transaction to ensure atomicity between entity deletion and event logging
  */
-export async function deleteAsset(userId: number, assetId: number) {
-  // First verify ownership
+export async function deleteAsset(userId: number, assetId: number): Promise<Asset> {
+  // First verify ownership (outside transaction for fast-fail)
   const asset = await prisma.asset.findFirst({
     where: {
       id: assetId,
@@ -187,21 +197,24 @@ export async function deleteAsset(userId: number, assetId: number) {
     value: asset.value
   };
 
-  // Delete asset
-  const deletedAsset = await prisma.asset.delete({
-    where: { id: assetId }
+  return await prisma.$transaction(async (tx) => {
+    // Delete asset
+    const deletedAsset = await tx.asset.delete({
+      where: { id: assetId }
+    });
+
+    // Log the DELETE event within the same transaction
+    await logAssetEvent(
+      ActionType.DELETE,
+      userId,
+      assetId,
+      beforeValue,
+      undefined,
+      tx as unknown as TransactionClient
+    );
+
+    return deletedAsset;
   });
-
-  // Log the DELETE event (entity is deleted but event remains)
-  await logAssetEvent(
-    ActionType.DELETE,
-    userId,
-    assetId,
-    beforeValue,
-    undefined
-  );
-
-  return deletedAsset;
 }
 
 /**
@@ -224,49 +237,54 @@ export async function getLiabilities(userId: number) {
 
 /**
  * Add a new liability for a user
+ * Uses transaction to ensure atomicity between entity creation and event logging
  */
-export async function addLiability(userId: number, data: LiabilityData) {
-  // Get or create balance sheet
-  let balanceSheet = await prisma.balanceSheet.findFirst({
-    where: { userId }
-  });
-
-  if (!balanceSheet) {
-    balanceSheet = await prisma.balanceSheet.create({
-      data: { userId }
+export async function addLiability(userId: number, data: LiabilityData): Promise<Liability> {
+  return await prisma.$transaction(async (tx) => {
+    // Get or create balance sheet
+    let balanceSheet = await tx.balanceSheet.findFirst({
+      where: { userId }
     });
-  }
 
-  // Create liability
-  const newLiability = await prisma.liability.create({
-    data: {
-      name: data.name,
-      value: data.value,
-      bsId: balanceSheet.id
+    if (!balanceSheet) {
+      balanceSheet = await tx.balanceSheet.create({
+        data: { userId }
+      });
     }
+
+    // Create liability
+    const newLiability = await tx.liability.create({
+      data: {
+        name: data.name,
+        value: data.value,
+        bsId: balanceSheet.id
+      }
+    });
+
+    // Log the CREATE event within the same transaction
+    await logLiabilityEvent(
+      ActionType.CREATE,
+      userId,
+      newLiability.id,
+      undefined,
+      {
+        name: newLiability.name,
+        value: newLiability.value
+      },
+      tx as unknown as TransactionClient
+    );
+
+    return newLiability;
   });
-
-  // Log the CREATE event
-  await logLiabilityEvent(
-    ActionType.CREATE,
-    userId,
-    newLiability.id,
-    undefined,
-    {
-      name: newLiability.name,
-      value: newLiability.value
-    }
-  );
-
-  return newLiability;
 }
 
 /**
  * Update a liability
  * Verifies ownership before update
+ * Uses transaction to ensure atomicity between entity update and event logging
  */
-export async function updateLiability(userId: number, liabilityId: number, data: LiabilityData) {
-  // First verify ownership
+export async function updateLiability(userId: number, liabilityId: number, data: LiabilityData): Promise<Liability> {
+  // First verify ownership (outside transaction for fast-fail)
   const liability = await prisma.liability.findFirst({
     where: {
       id: liabilityId,
@@ -286,36 +304,40 @@ export async function updateLiability(userId: number, liabilityId: number, data:
     value: liability.value
   };
 
-  // Update liability
-  const updatedLiability = await prisma.liability.update({
-    where: { id: liabilityId },
-    data: {
-      name: data.name,
-      value: data.value
-    }
+  return await prisma.$transaction(async (tx) => {
+    // Update liability
+    const updatedLiability = await tx.liability.update({
+      where: { id: liabilityId },
+      data: {
+        name: data.name,
+        value: data.value
+      }
+    });
+
+    // Log the UPDATE event within the same transaction
+    await logLiabilityEvent(
+      ActionType.UPDATE,
+      userId,
+      liabilityId,
+      beforeValue,
+      {
+        name: updatedLiability.name,
+        value: updatedLiability.value
+      },
+      tx as unknown as TransactionClient
+    );
+
+    return updatedLiability;
   });
-
-  // Log the UPDATE event
-  await logLiabilityEvent(
-    ActionType.UPDATE,
-    userId,
-    liabilityId,
-    beforeValue,
-    {
-      name: updatedLiability.name,
-      value: updatedLiability.value
-    }
-  );
-
-  return updatedLiability;
 }
 
 /**
  * Delete a liability
  * Verifies ownership before deletion
+ * Uses transaction to ensure atomicity between entity deletion and event logging
  */
-export async function deleteLiability(userId: number, liabilityId: number) {
-  // First verify ownership
+export async function deleteLiability(userId: number, liabilityId: number): Promise<Liability> {
+  // First verify ownership (outside transaction for fast-fail)
   const liability = await prisma.liability.findFirst({
     where: {
       id: liabilityId,
@@ -335,19 +357,22 @@ export async function deleteLiability(userId: number, liabilityId: number) {
     value: liability.value
   };
 
-  // Delete liability
-  const deletedLiability = await prisma.liability.delete({
-    where: { id: liabilityId }
+  return await prisma.$transaction(async (tx) => {
+    // Delete liability
+    const deletedLiability = await tx.liability.delete({
+      where: { id: liabilityId }
+    });
+
+    // Log the DELETE event within the same transaction
+    await logLiabilityEvent(
+      ActionType.DELETE,
+      userId,
+      liabilityId,
+      beforeValue,
+      undefined,
+      tx as unknown as TransactionClient
+    );
+
+    return deletedLiability;
   });
-
-  // Log the DELETE event (entity is deleted but event remains)
-  await logLiabilityEvent(
-    ActionType.DELETE,
-    userId,
-    liabilityId,
-    beforeValue,
-    undefined
-  );
-
-  return deletedLiability;
 }
