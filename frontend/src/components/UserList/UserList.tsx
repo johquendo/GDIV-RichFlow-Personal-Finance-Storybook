@@ -112,7 +112,7 @@ const UserList: React.FC<UserListProps> = ({ users, currentUserId, onDelete, onU
 
               {/* Actions */}
               <div className="flex items-center gap-2 sm:ml-4">
-                {!isCurrentUser && onDelete && (
+                {!isCurrentUser && !user.isAdmin && onDelete && (
                   <button
                     className="px-3 py-1.5 text-xs font-medium rounded-md bg-(--color-error)/10 text-(--color-error) border border-(--color-error)/20 hover:bg-(--color-error)/20 transition-colors"
                     onClick={(e) => {
@@ -123,7 +123,7 @@ const UserList: React.FC<UserListProps> = ({ users, currentUserId, onDelete, onU
                     Delete
                   </button>
                 )}
-                {onUserClick && (
+                {!user.isAdmin && onUserClick && (
                   <button
                     className="px-3 py-1.5 text-xs font-medium rounded-md bg-(--color-purple)/10 text-(--color-purple-light) border border-(--color-purple)/20 hover:bg-(--color-purple)/20 transition-colors"
                     onClick={(e) => {

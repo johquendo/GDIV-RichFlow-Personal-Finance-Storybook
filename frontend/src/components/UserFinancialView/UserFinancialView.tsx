@@ -278,34 +278,34 @@ const UserFinancialView: React.FC<UserFinancialViewProps> = ({ userId, userName,
             />
 
             {/* Bar chart for Total Income and Expenses */}
-            <div className="graph-card">
-              <div className="horizontal-graph">
-                <div className="hbar">
-                  <div className="hbar-label">Total Income</div>
-                  <div className="hbar-track">
+            <div className="rf-graph-card">
+              <div className="flex flex-col gap-3 py-1">
+                <div className="rf-hbar">
+                  <div className="rf-hbar-label">Total Income</div>
+                  <div className="rf-hbar-track">
                     <div
-                      className="hbar-fill income"
+                      className="rf-hbar-fill rf-hbar-fill-income"
                       style={{ width: `${totalIncome > 0 ? 100 : 0}%` }}
                     />
                   </div>
-                  <div className="hbar-value">{formatCurrency(totalIncome, userCurrency)}</div>
+                  <div className="rf-hbar-value">{formatCurrency(totalIncome, userCurrency)}</div>
                 </div>
-                <div className="hbar">
-                  <div className="hbar-label">Total Expenses</div>
-                  <div className="hbar-track">
+                <div className="rf-hbar">
+                  <div className="rf-hbar-label">Total Expenses</div>
+                  <div className="rf-hbar-track">
                     <div
-                      className="hbar-fill expenses"
+                      className="rf-hbar-fill rf-hbar-fill-expense"
                       style={{ 
                         width: `${totalExpenses > 0 ? Math.min(100, (totalExpenses / Math.max(totalIncome, totalExpenses, 1)) * 100) : 0}%` 
                       }}
                     />
                   </div>
-                  <div className="hbar-value">{formatCurrency(totalExpenses, userCurrency)}</div>
+                  <div className="rf-hbar-value">{formatCurrency(totalExpenses, userCurrency)}</div>
                 </div>
               </div>
-              <div className={`cashflow-row ${(totalIncome - totalExpenses) < 0 ? 'negative' : 'positive'}`}>
-                <div className="cashflow-label">Cashflow</div>
-                <div className="cashflow-amount">
+              <div className={`rf-total-row ${(totalIncome - totalExpenses) < 0 ? 'rf-total-negative' : 'rf-total-positive'}`}>
+                <div className="rf-total-label">Cashflow</div>
+                <div className="rf-total-amount">
                   {formatCurrency(Math.abs(totalIncome - totalExpenses), userCurrency)}
                   {(totalIncome - totalExpenses) < 0 && ' (deficit)'}
                 </div>
@@ -314,36 +314,36 @@ const UserFinancialView: React.FC<UserFinancialViewProps> = ({ userId, userName,
 
             {/* Net Worth card (when balance sheet exists) */}
             {financialData.balanceSheet && (
-              <div className="graph-card net-worth-card">
-                <div className="horizontal-graph">
-                  <div className="hbar">
-                    <div className="hbar-label">Total Assets</div>
-                    <div className="hbar-track">
+              <div className="rf-graph-card">
+                <div className="flex flex-col gap-3 mb-3">
+                  <div className="rf-hbar">
+                    <div className="rf-hbar-label">Total Assets</div>
+                    <div className="rf-hbar-track">
                       <div
-                        className="hbar-fill assets"
+                        className="rf-hbar-fill rf-hbar-fill-asset"
                         style={{ 
                           width: `${totalAssets > 0 ? Math.min(100, (totalAssets / Math.max(totalAssets, totalLiabilities, 1)) * 100) : 0}%` 
                         }}
                       />
                     </div>
-                    <div className="hbar-value">{formatCurrency(totalAssets, userCurrency)}</div>
+                    <div className="rf-hbar-value">{formatCurrency(totalAssets, userCurrency)}</div>
                   </div>
-                  <div className="hbar">
-                    <div className="hbar-label">Total Liabilities</div>
-                    <div className="hbar-track">
+                  <div className="rf-hbar">
+                    <div className="rf-hbar-label">Total Liabilities</div>
+                    <div className="rf-hbar-track">
                       <div
-                        className="hbar-fill liabilities"
+                        className="rf-hbar-fill rf-hbar-fill-liability"
                         style={{ 
                           width: `${totalLiabilities > 0 ? Math.min(100, (totalLiabilities / Math.max(totalAssets, totalLiabilities, 1)) * 100) : 0}%` 
                         }}
                       />
                     </div>
-                    <div className="hbar-value">{formatCurrency(totalLiabilities, userCurrency)}</div>
+                    <div className="rf-hbar-value">{formatCurrency(totalLiabilities, userCurrency)}</div>
                   </div>
                 </div>
-                <div className={`net-worth-row ${netWorth < 0 ? 'negative' : 'positive'}`}>
-                  <div className="net-worth-label">Net Worth</div>
-                  <div className="net-worth-amount">
+                <div className={`rf-total-row ${netWorth < 0 ? 'rf-total-negative' : 'rf-total-positive'}`}>
+                  <div className="rf-total-label">Net Worth</div>
+                  <div className="rf-total-amount">
                     {formatCurrency(Math.abs(netWorth), userCurrency)}
                     {netWorth < 0 && ' (negative)'}
                   </div>
@@ -352,9 +352,9 @@ const UserFinancialView: React.FC<UserFinancialViewProps> = ({ userId, userName,
             )}
 
             {/* Cash Savings */}
-            <div className="savings-bar">
-              <span className="savings-label">Cash / Savings</span>
-              <span className="savings-amount">{formatCurrency(cashSavings, userCurrency)}</span>
+            <div className="rf-savings-bar">
+              <span className="rf-savings-label">Cash / Savings</span>
+              <span className="rf-savings-amount">{formatCurrency(cashSavings, userCurrency)}</span>
             </div>
           </div>
         </div>
