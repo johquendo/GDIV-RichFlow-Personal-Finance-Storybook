@@ -1,0 +1,6 @@
+{
+  "devDependencies": {
+    "@storybook/jest": "^0.2.2",
+    "@storybook/test": "^8.6.15"
+  }
+}
