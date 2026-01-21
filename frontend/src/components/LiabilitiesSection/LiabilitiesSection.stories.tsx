@@ -1,317 +1,81 @@
 // LiabilitiesSection.stories.tsx
+// This story uses the REAL LiabilitiesSectionView component from LiabilitiesSection.tsx
 import type { Meta, StoryObj } from '@storybook/react';
 import { within, userEvent, waitFor, fn, expect } from '@storybook/test';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import '../../styles/globals.css';
+import { LiabilitiesSectionView, LiabilitiesSectionViewProps } from './LiabilitiesSection';
 
-// Create a mock component that looks and behaves like LiabilitiesSection
-const MockLiabilitiesSection: React.FC = () => {
-  const [liabilities, setLiabilities] = useState<Array<{id: string, name: string, value: number}>>([]);
-  const [name, setName] = useState('');
-  const [amount, setAmount] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editAmount, setEditAmount] = useState('');
+// Type for liability items (matches the real component)
+type LiabilityItem = { id: number; name: string; value: number };
 
-  const isAddValid = name.trim().length > 0 && amount.trim().length > 0 && !isNaN(parseFloat(amount));
-  const isEditValid = editName.trim().length > 0 && editAmount.trim().length > 0 && !isNaN(parseFloat(editAmount));
-  
-  const handleAdd = async () => {
-    if (!isAddValid) return;
-    
-    setLoading(true);
-    setError(null);
-    
-    // Simulate API delay
-    setTimeout(() => {
-      const newItem = {
-        id: Date.now().toString(),
-        name,
-        value: parseFloat(amount),
-      };
-      setLiabilities(prev => [...prev, newItem]);
-      setName('');
-      setAmount('');
-      setLoading(false);
-    }, 500);
+// Mock currency objects for stories
+const USD_CURRENCY = { id: 1, cur_symbol: '$', cur_name: 'USD' };
+const EUR_CURRENCY = { id: 2, cur_symbol: '€', cur_name: 'EUR' };
+
+/**
+ * Stateful wrapper that provides interactive state management for the REAL View component.
+ * This allows us to test the actual UI code while simulating API behavior.
+ */
+const StatefulLiabilitiesSection = (props: Partial<LiabilitiesSectionViewProps>) => {
+  const [liabilities, setLiabilities] = useState<LiabilityItem[]>(
+    props.liabilities ?? [
+      { id: 1, name: 'Personal Loan', value: 10000 },
+      { id: 2, name: 'Medical Bill', value: 5000 },
+    ]
+  );
+  const [isAdding, setIsAdding] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
+
+  const handleAdd = async (item: { name: string; value: number }) => {
+    setIsAdding(true);
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setLiabilities(prev => [
+      ...prev,
+      { id: Date.now(), name: item.name, value: item.value }
+    ]);
+    setIsAdding(false);
   };
-  
-  const handleDelete = async (id: string) => {
-    setDeletingId(id);
-    
-    setTimeout(() => {
-      setLiabilities(prev => prev.filter(item => item.id !== id));
-      setDeletingId(null);
-    }, 500);
+
+  const handleUpdate = async (item: { id: number; name: string; value: number }) => {
+    setUpdatingId(item.id);
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setLiabilities(prev => prev.map(l => l.id === item.id ? { ...l, ...item } : l));
+    setUpdatingId(null);
   };
-  
-  const startEdit = (item: {id: string, name: string, value: number}) => {
-    setEditingId(item.id);
-    setEditName(item.name);
-    setEditAmount(item.value.toString());
+
+  const handleDelete = async (item: LiabilityItem) => {
+    setDeletingId(item.id);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setLiabilities(prev => prev.filter(l => l.id !== item.id));
+    setDeletingId(null);
   };
-  
-  const handleEdit = async () => {
-    if (!editingId || !isEditValid) return;
-    
-    setLoading(true);
-    
-    setTimeout(() => {
-      setLiabilities(prev => 
-        prev.map(item => 
-          item.id === editingId 
-            ? { ...item, name: editName, value: parseFloat(editAmount) } 
-            : item
-        )
-      );
-      setEditingId(null);
-      setEditName('');
-      setEditAmount('');
-      setLoading(false);
-    }, 500);
-  };
-  
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditName('');
-    setEditAmount('');
-    setError(null);
-  };
-  
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingId) {
-      handleEdit();
-    } else {
-      handleAdd();
-    }
-  };
-  
+
+  // Use the REAL LiabilitiesSectionView component
   return (
-    <div className="rf-card text-white" style={{ 
-      maxWidth: '800px', 
-      margin: '0 auto',
-      backgroundColor: '#1a1a1a',
-      borderRadius: '8px',
-      padding: '20px'
-    }}>
-      <div className="rf-section-header" style={{ 
-        fontSize: '1.5rem',
-        fontWeight: 'bold',
-        marginBottom: '20px',
-        color: '#d4af37'
-      }}>
-        Liabilities
-      </div>
-      
-      {error && (
-        <div className="rf-error" style={{ 
-          backgroundColor: '#f8d7da', 
-          color: '#721c24', 
-          padding: '10px', 
-          borderRadius: '4px',
-          marginBottom: '15px',
-          animation: 'shake 0.5s ease-in-out'
-        }}>
-          ⚠️ {error}
-        </div>
-      )}
-      
-      {liabilities.length === 0 ? (
-        <p style={{ textAlign: 'center', color: '#d4af37', padding: '20px' }}>
-          No liabilities added yet.
-        </p>
-      ) : (
-        <div style={{ overflowX: 'auto', marginBottom: '20px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: 'left', padding: '10px', borderBottom: '1px solid #333', color: '#d4af37' }}>Name</th>
-                <th style={{ textAlign: 'right', padding: '10px', borderBottom: '1px solid #333', color: '#d4af37' }}>Value</th>
-                <th style={{ textAlign: 'center', padding: '10px', borderBottom: '1px solid #333', color: '#d4af37' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {liabilities.map(item => (
-                <tr key={item.id} style={{ borderBottom: '1px solid #333' }}>
-                  <td style={{ padding: '10px' }}>{item.name}</td>
-                  <td style={{ textAlign: 'right', padding: '10px', fontFamily: 'monospace' }}>
-                    ${item.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td style={{ textAlign: 'center', padding: '10px' }}>
-                    <button
-                      onClick={() => startEdit(item)}
-                      disabled={deletingId === item.id || loading}
-                      style={{
-                        background: 'rgba(115, 69, 175, 0.1)',
-                        border: '1px solid #7345AF',
-                        color: '#7345AF',
-                        borderRadius: '4px',
-                        padding: '4px 12px',
-                        cursor: (deletingId === item.id || loading) ? 'not-allowed' : 'pointer',
-                        marginRight: '10px',
-                        opacity: (deletingId === item.id || loading) ? 0.5 : 1,
-                        fontWeight: '500',
-                        fontSize: '0.875rem'
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      disabled={deletingId === item.id || loading}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: '#ff6b6b',
-                        cursor: (deletingId === item.id || loading) ? 'not-allowed' : 'pointer',
-                        opacity: (deletingId === item.id || loading) ? 0.5 : 1,
-                        fontSize: '1.2rem',
-                        lineHeight: 1
-                      }}
-                      title="Delete"
-                    >
-                      {deletingId === item.id ? '...' : '✕'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-        <input
-          type="text"
-          placeholder="Liability name"
-          value={editingId ? editName : name}
-          onChange={(e) => {
-            if (editingId) {
-              setEditName(e.target.value);
-            } else {
-              setName(e.target.value);
-            }
-            if (error) setError(null);
-          }}
-          style={{
-            flex: '1',
-            minWidth: '120px',
-            padding: '10px',
-            backgroundColor: '#2a2a2a',
-            border: '1px solid #444',
-            borderRadius: '4px',
-            color: 'white',
-            fontSize: '14px'
-          }}
-          disabled={loading}
-        />
-        <input
-          type="number"
-          placeholder="Total Cost"
-          step="0.01"
-          value={editingId ? editAmount : amount}
-          onChange={(e) => {
-            if (editingId) {
-              setEditAmount(e.target.value);
-            } else {
-              setAmount(e.target.value);
-            }
-            if (error) setError(null);
-          }}
-          style={{
-            flex: '1',
-            minWidth: '120px',
-            padding: '10px',
-            backgroundColor: '#2a2a2a',
-            border: '1px solid #444',
-            borderRadius: '4px',
-            color: 'white',
-            fontSize: '14px'
-          }}
-          disabled={loading}
-        />
-        
-        {editingId ? (
-          <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
-            <button
-              type="button"
-              onClick={handleEdit}
-              disabled={loading || !isEditValid}
-              style={{
-                flex: '1',
-                padding: '10px',
-                backgroundColor: '#7345AF',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: (loading || !isEditValid) ? 'not-allowed' : 'pointer',
-                opacity: (loading || !isEditValid) ? 0.5 : 1,
-                fontSize: '14px',
-                fontWeight: 'bold'
-              }}
-            >
-              {loading ? 'Saving...' : 'Save'}
-            </button>
-            <button
-              type="button"
-              onClick={cancelEdit}
-              disabled={loading}
-              style={{
-                flex: '1',
-                padding: '10px',
-                backgroundColor: 'transparent',
-                color: '#EDCA69',
-                border: '1px solid #EDCA69',
-                borderRadius: '4px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                fontSize: '14px',
-                fontWeight: 'bold'
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button
-            type="submit"
-            disabled={loading || !isAddValid}
-            style={{
-              width: '100%',
-              padding: '10px',
-              backgroundColor: '#7345AF',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: (loading || !isAddValid) ? 'not-allowed' : 'pointer',
-              opacity: (loading || !isAddValid) ? 0.5 : 1,
-              fontSize: '14px',
-              fontWeight: 'bold'
-            }}
-          >
-            {loading ? 'Adding...' : 'Add Liability'}
-          </button>
-        )}
-      </form>
-      
-      {/* Animation for error shake */}
-      <style>{`
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-          20%, 40%, 60%, 80% { transform: translateX(5px); }
-        }
-      `}</style>
-    </div>
+    <LiabilitiesSectionView
+      liabilities={liabilities}
+      isLoading={props.isLoading ?? false}
+      error={props.error ?? null}
+      currency={props.currency ?? USD_CURRENCY}
+      isAdding={props.isAdding ?? isAdding}
+      isUpdating={props.isUpdating ?? (updatingId !== null)}
+      isDeletingId={props.isDeletingId ?? deletingId}
+      onAdd={props.onAdd ?? handleAdd}
+      onUpdate={props.onUpdate ?? handleUpdate}
+      onDelete={props.onDelete ?? handleDelete}
+    />
   );
 };
 
-const meta: Meta<typeof MockLiabilitiesSection> = {
+const meta: Meta<typeof LiabilitiesSectionView> = {
   title: 'BalanceSheet/LiabilitiesSection',
-  component: MockLiabilitiesSection,
+  component: LiabilitiesSectionView,
+  // Use the stateful wrapper for interactive stories
+  render: (args) => <StatefulLiabilitiesSection {...args} />,
   parameters: {
     layout: 'centered',
     backgrounds: {
@@ -322,15 +86,25 @@ const meta: Meta<typeof MockLiabilitiesSection> = {
       ],
     },
   },
+  args: {
+    currency: USD_CURRENCY,
+  },
   tags: ['autodocs'],
-} satisfies Meta<typeof MockLiabilitiesSection>;
+} satisfies Meta<typeof LiabilitiesSectionView>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+// ============================================================================
+// STORIES - Testing the REAL LiabilitiesSectionView component
+// ============================================================================
+
 // 1. DEFAULT STATE - Empty liabilities
 export const Default: Story = {
   name: 'Default - Empty State',
+  args: {
+    liabilities: [],
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     
@@ -347,31 +121,8 @@ export const Default: Story = {
 // 2. LOADING STATE
 export const Loading: Story = {
   name: 'Loading State',
-  render: () => {
-    const Component: React.FC = () => {
-      return (
-        <div className="rf-card text-white" style={{ 
-          maxWidth: '800px', 
-          margin: '0 auto',
-          backgroundColor: '#1a1a1a',
-          borderRadius: '8px',
-          padding: '20px'
-        }}>
-          <div className="rf-section-header" style={{ 
-            fontSize: '1.5rem',
-            fontWeight: 'bold',
-            marginBottom: '20px',
-            color: '#d4af37'
-          }}>
-            Liabilities
-          </div>
-          <p style={{ textAlign: 'center', color: '#d4af37', padding: '20px' }}>
-            Loading liabilities...
-          </p>
-        </div>
-      );
-    };
-    return <Component />;
+  args: {
+    isLoading: true,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -381,11 +132,49 @@ export const Loading: Story = {
   },
 };
 
-// 3. SUCCESSFULLY ADDING A LIABILITY
-export const SuccessfulAdd: Story = {
-  name: 'Successfully Add Liability',
+// 3. WITH EXISTING LIABILITIES
+export const WithExistingLiabilities: Story = {
+  name: 'With Existing Liabilities',
+  args: {
+    liabilities: [
+      { id: 1, name: 'Mortgage', value: 350000 },
+      { id: 2, name: 'Auto Loan', value: 25000 },
+      { id: 3, name: 'Credit Card', value: 5000 },
+      { id: 4, name: 'Student Loan', value: 45000 },
+    ],
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    
+    // Verify all liabilities are displayed
+    await waitFor(() => {
+      expect(canvas.getByText('Mortgage')).toBeInTheDocument();
+      expect(canvas.getByText('Auto Loan')).toBeInTheDocument();
+      expect(canvas.getByText('Credit Card')).toBeInTheDocument();
+      expect(canvas.getByText('Student Loan')).toBeInTheDocument();
+    });
+    
+    // Verify formatted currency values (using flexible matching)
+    expect(canvas.getByText(/\$350,000/)).toBeInTheDocument();
+    expect(canvas.getByText(/\$25,000/)).toBeInTheDocument();
+    expect(canvas.getByText(/\$5,000/)).toBeInTheDocument();
+    expect(canvas.getByText(/\$45,000/)).toBeInTheDocument();
+  },
+};
+
+// 4. SUCCESSFULLY ADDING A LIABILITY
+export const SuccessfulAdd: Story = {
+  name: 'Successfully Add Liability',
+  args: {
+    liabilities: [],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    
+    // Verify empty state first
+    await waitFor(() => {
+      expect(canvas.getByText('No liabilities added yet.')).toBeInTheDocument();
+    });
     
     // Fill in the form
     await userEvent.type(canvas.getByPlaceholderText('Liability name'), 'Student Loan');
@@ -402,8 +191,8 @@ export const SuccessfulAdd: Story = {
     // Wait for the item to appear in the table
     await waitFor(() => {
       expect(canvas.getByText('Student Loan')).toBeInTheDocument();
-      expect(canvas.getByText('$25,000.00')).toBeInTheDocument();
-    }, { timeout: 2000 });
+      expect(canvas.getByText(/\$25,000/)).toBeInTheDocument();
+    }, { timeout: 3000 });
     
     // Verify form is cleared after successful add
     await waitFor(() => {
@@ -415,182 +204,67 @@ export const SuccessfulAdd: Story = {
   },
 };
 
-// 5. ADDING WITH INVALID INPUT (non-numeric amount) - SHOWS ERROR
-export const InvalidInputNonNumeric: Story = {
-  name: 'Invalid Input - Non-Numeric Amount (Disables Button)',
+// 5. BUTTON VALIDATION - Tests that button is properly disabled/enabled based on form state
+export const ButtonValidation: Story = {
+  name: 'Button Validation Behavior',
+  args: {
+    liabilities: [],
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     
-    // Fill name field with valid data
-    await userEvent.type(canvas.getByPlaceholderText('Liability name'), 'Car Loan');
+    // Small delay helper
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
     
-    // Try to input non-numeric value
-    // Note: input[type="number"] typically prevents this, but we'll test the validation
-    const amountInput = canvas.getByPlaceholderText('Total Cost') as HTMLInputElement;
+    // Button should be disabled initially (both fields empty)
+    const addButton = canvas.getByRole('button', { name: /Add Liability/i });
+    expect(addButton).toBeDisabled();
     
-    // Clear any existing value
-    await userEvent.clear(amountInput);
+    await delay(500);
     
-    // Type letters (some browsers may prevent this, but we'll try)
-    await userEvent.type(amountInput, 'abc');
+    // Fill only name - button should still be disabled (amount missing)
+    await userEvent.type(canvas.getByPlaceholderText('Liability name'), 'Test Loan');
+    await delay(300);
+    expect(addButton).toBeDisabled();
     
-    // The button should be disabled when input is invalid
-    await waitFor(() => {
-        expect(canvas.getByRole('button', { name: /Add Liability/i })).toBeDisabled();
-    });
+    await delay(500);
+    
+    // Clear name and fill only amount - button should still be disabled
+    await userEvent.clear(canvas.getByPlaceholderText('Liability name'));
+    await userEvent.type(canvas.getByPlaceholderText('Total Cost'), '1000');
+    await delay(300);
+    expect(addButton).toBeDisabled();
+    
+    await delay(500);
+    
+    // Fill both - button should be enabled
+    await userEvent.type(canvas.getByPlaceholderText('Liability name'), 'Test Loan');
+    await delay(300);
+    expect(addButton).not.toBeDisabled();
   },
 };
 
-// 8. SUCCESSFULLY DELETING A LIABILITY
+// 6. SUCCESSFULLY DELETING A LIABILITY
 export const SuccessfulDelete: Story = {
   name: 'Successfully Delete Liability',
-  render: () => {
-    const Component: React.FC = () => {
-      const [liabilities, setLiabilities] = useState([
-        { id: '1', name: 'Personal Loan', value: 10000 },
-        { id: '2', name: 'Medical Bill', value: 5000 },
-      ]);
-      
-      const handleDelete = (id: string) => {
-        setLiabilities(prev => prev.filter(item => item.id !== id));
-      };
-      
-      return (
-        <div className="rf-card text-white" style={{ 
-          maxWidth: '800px', 
-          margin: '0 auto',
-          backgroundColor: '#1a1a1a',
-          borderRadius: '8px',
-          padding: '20px'
-        }}>
-          <div className="rf-section-header" style={{ 
-            fontSize: '1.5rem',
-            fontWeight: 'bold',
-            marginBottom: '20px',
-            color: '#d4af37'
-          }}>
-            Liabilities
-          </div>
-          
-          <div style={{ overflowX: 'auto', marginBottom: '20px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', padding: '10px', borderBottom: '1px solid #333', color: '#d4af37' }}>Name</th>
-                  <th style={{ textAlign: 'right', padding: '10px', borderBottom: '1px solid #333', color: '#d4af37' }}>Value</th>
-                  <th style={{ textAlign: 'center', padding: '10px', borderBottom: '1px solid #333', color: '#d4af37' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {liabilities.map(item => (
-                  <tr key={item.id} style={{ borderBottom: '1px solid #333' }}>
-                    <td style={{ padding: '10px' }}>{item.name}</td>
-                    <td style={{ textAlign: 'right', padding: '10px', fontFamily: 'monospace' }}>
-                      ${item.value.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td style={{ textAlign: 'center', padding: '10px' }}>
-                      <button
-                        style={{
-                          background: 'rgba(115, 69, 175, 0.1)',
-                          border: '1px solid #7345AF',
-                          color: '#7345AF',
-                          borderRadius: '4px',
-                          padding: '4px 12px',
-                          cursor: 'pointer',
-                          marginRight: '10px',
-                          fontWeight: '500',
-                          fontSize: '0.875rem'
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        title="Delete"
-                        style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#ff6b6b',
-                            cursor: 'pointer',
-                            fontSize: '1.2rem',
-                            lineHeight: 1
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          
-          <form style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-            <input
-              type="text"
-              placeholder="Liability name"
-              style={{
-                flex: '1',
-                minWidth: '120px',
-                padding: '10px',
-                backgroundColor: '#2a2a2a',
-                border: '1px solid #444',
-                borderRadius: '4px',
-                color: 'white',
-                fontSize: '14px'
-              }}
-            />
-            <input
-              type="number"
-              placeholder="Total Cost"
-              style={{
-                flex: '1',
-                minWidth: '120px',
-                padding: '10px',
-                backgroundColor: '#2a2a2a',
-                border: '1px solid #444',
-                borderRadius: '4px',
-                color: 'white',
-                fontSize: '14px'
-              }}
-            />
-            <button
-              type="button"
-              style={{
-                width: '100%',
-                padding: '10px',
-                backgroundColor: '#7345AF',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: 'bold'
-              }}
-            >
-              Add Liability
-            </button>
-          </form>
-        </div>
-      );
-    };
-    return <Component />;
-  },
+  // Uses default liabilities from stateful wrapper
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     
     // Verify both items exist initially
-    expect(canvas.getByText('Personal Loan')).toBeInTheDocument();
-    expect(canvas.getByText('Medical Bill')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(canvas.getByText('Personal Loan')).toBeInTheDocument();
+      expect(canvas.getByText('Medical Bill')).toBeInTheDocument();
+    });
     
-    // Find and click the first delete button
-    const deleteButtons = canvas.getAllByTitle('Delete');
+    // Find and click the first delete button (✕)
+    const deleteButtons = canvas.getAllByText('✕');
     await userEvent.click(deleteButtons[0]);
     
     // Wait for deletion to complete
     await waitFor(() => {
       expect(canvas.queryByText('Personal Loan')).not.toBeInTheDocument();
-    });
+    }, { timeout: 3000 });
     
     // Verify the other item still exists
     expect(canvas.getByText('Medical Bill')).toBeInTheDocument();

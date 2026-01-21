@@ -9,16 +9,38 @@ import {
 import { useCurrency } from "../../context/CurrencyContext";
 import { formatCurrency } from "../../utils/currency.utils";
 import FinancialTable, { ColumnDefinition } from "../Shared/FinancialTable";
+import { Currency } from "../../types/currency.types";
 
-const LiabilitiesSection: React.FC = () => {
-  const { currency } = useCurrency();
+// ============================================================================
+// VIEW COMPONENT - Pure UI, no data fetching
+// This is exported for Storybook testing
+// ============================================================================
 
-  // TanStack Query hooks
-  const { data: liabilities, isLoading, error: queryError } = useLiabilitiesQuery();
-  const addLiabilityMutation = useAddLiabilityMutation();
-  const updateLiabilityMutation = useUpdateLiabilityMutation();
-  const deleteLiabilityMutation = useDeleteLiabilityMutation();
+export interface LiabilitiesSectionViewProps {
+  liabilities: LiabilityItem[];
+  isLoading: boolean;
+  error: string | null;
+  currency: Currency | null;
+  isAdding: boolean;
+  isUpdating: boolean;
+  isDeletingId: number | null;
+  onAdd: (item: { name: string; value: number }) => Promise<void>;
+  onUpdate: (item: { id: number; name: string; value: number }) => Promise<void>;
+  onDelete: (item: LiabilityItem) => Promise<void>;
+}
 
+export const LiabilitiesSectionView: React.FC<LiabilitiesSectionViewProps> = ({
+  liabilities,
+  isLoading,
+  error,
+  currency,
+  isAdding,
+  isUpdating,
+  isDeletingId,
+  onAdd,
+  onUpdate,
+  onDelete,
+}) => {
   const [editingItem, setEditingItem] = useState<LiabilityItem | null>(null);
   const [liabilityName, setLiabilityName] = useState("");
   const [liabilityAmount, setLiabilityAmount] = useState("");
@@ -26,11 +48,11 @@ const LiabilitiesSection: React.FC = () => {
 
   // Handle add liability
   const handleAddLiability = async () => {
-    if (!liabilityName.trim() || !liabilityAmount.trim() || addLiabilityMutation.isPending) return;
+    if (!liabilityName.trim() || !liabilityAmount.trim() || isAdding) return;
 
     try {
       setLocalError(null);
-      await addLiabilityMutation.mutateAsync({
+      await onAdd({
         name: liabilityName,
         value: parseFloat(liabilityAmount),
       });
@@ -43,11 +65,11 @@ const LiabilitiesSection: React.FC = () => {
 
   // Handle update liability
   const handleUpdateLiability = async () => {
-    if (!editingItem || !liabilityName.trim() || !liabilityAmount.trim() || updateLiabilityMutation.isPending) return;
+    if (!editingItem || !liabilityName.trim() || !liabilityAmount.trim() || isUpdating) return;
 
     try {
       setLocalError(null);
-      await updateLiabilityMutation.mutateAsync({
+      await onUpdate({
         id: editingItem.id,
         name: liabilityName,
         value: parseFloat(liabilityAmount),
@@ -76,11 +98,11 @@ const LiabilitiesSection: React.FC = () => {
 
   // Handle delete liability
   const handleDelete = async (item: LiabilityItem) => {
-    if (deleteLiabilityMutation.isPending) return;
+    if (isDeletingId) return;
 
     try {
       setLocalError(null);
-      await deleteLiabilityMutation.mutateAsync({ id: item.id });
+      await onDelete(item);
     } catch (err: unknown) {
       setLocalError("Failed to delete liability");
     }
@@ -107,7 +129,7 @@ const LiabilitiesSection: React.FC = () => {
   ];
 
   // Determine which item is being deleted (for loading state)
-  const deletingId = deleteLiabilityMutation.isPending ? deleteLiabilityMutation.variables?.id : null;
+  const deletingId = isDeletingId;
 
   // Show loading state
   if (isLoading) {
@@ -120,8 +142,7 @@ const LiabilitiesSection: React.FC = () => {
   }
 
   // Display error from hook or local error
-  const displayError =
-    localError || (queryError instanceof Error ? queryError.message : queryError ? String(queryError) : null);
+  const displayError = localError || error;
 
   // Default empty liabilities array if data is not yet available
   const liabilityData = liabilities ?? [];
@@ -147,21 +168,21 @@ const LiabilitiesSection: React.FC = () => {
 
       <form onSubmit={handleSubmit} className="flex flex-wrap gap-3">
         <input
-          className="rf-input flex-1 min-w-[120px]"
+          className="rf-input flex-1 min-w-30"
           type="text"
           placeholder="Liability name"
           value={liabilityName}
           onChange={(e) => setLiabilityName(e.target.value)}
-          disabled={addLiabilityMutation.isPending}
+          disabled={isAdding}
         />
         <input
-          className="rf-input flex-1 min-w-[120px]"
+          className="rf-input flex-1 min-w-30"
           type="number"
           placeholder="Total Cost"
           step="0.01"
           value={liabilityAmount}
           onChange={(e) => setLiabilityAmount(e.target.value)}
-          disabled={addLiabilityMutation.isPending || updateLiabilityMutation.isPending}
+          disabled={isAdding || isUpdating}
         />
         {editingItem !== null ? (
           <div className="rf-edit-actions w-full">
@@ -169,17 +190,15 @@ const LiabilitiesSection: React.FC = () => {
               type="button"
               className="rf-btn-save"
               onClick={handleUpdateLiability}
-              disabled={updateLiabilityMutation.isPending || !liabilityName.trim() || !liabilityAmount.trim()}
+              disabled={isUpdating || !liabilityName.trim() || !liabilityAmount.trim()}
             >
-              {updateLiabilityMutation.isPending && updateLiabilityMutation.variables?.id === editingItem?.id
-                ? "Saving..."
-                : "Save"}
+              {isUpdating ? "Saving..." : "Save"}
             </button>
             <button
               type="button"
               className="rf-btn-cancel"
               onClick={handleCancelEdit}
-              disabled={updateLiabilityMutation.isPending}
+              disabled={isUpdating}
             >
               Cancel
             </button>
@@ -188,13 +207,45 @@ const LiabilitiesSection: React.FC = () => {
           <button
             className="rf-btn-primary w-full"
             type="submit"
-            disabled={addLiabilityMutation.isPending || !liabilityName.trim() || !liabilityAmount.trim()}
+            disabled={isAdding || !liabilityName.trim() || !liabilityAmount.trim()}
           >
-            {addLiabilityMutation.isPending ? "Adding..." : "Add Liability"}
+            {isAdding ? "Adding..." : "Add Liability"}
           </button>
         )}
       </form>
     </div>
+  );
+};
+
+// ============================================================================
+// CONTAINER COMPONENT - Handles data fetching and mutations
+// This is the default export used by the application
+// ============================================================================
+
+const LiabilitiesSection: React.FC = () => {
+  const { currency } = useCurrency();
+
+  // TanStack Query hooks
+  const { data: liabilities, isLoading, error: queryError } = useLiabilitiesQuery();
+  const addLiabilityMutation = useAddLiabilityMutation();
+  const updateLiabilityMutation = useUpdateLiabilityMutation();
+  const deleteLiabilityMutation = useDeleteLiabilityMutation();
+
+  const errorMessage = queryError instanceof Error ? queryError.message : queryError ? String(queryError) : null;
+
+  return (
+    <LiabilitiesSectionView
+      liabilities={liabilities || []}
+      isLoading={isLoading}
+      error={errorMessage}
+      currency={currency}
+      isAdding={addLiabilityMutation.isPending}
+      isUpdating={updateLiabilityMutation.isPending}
+      isDeletingId={deleteLiabilityMutation.isPending ? deleteLiabilityMutation.variables?.id ?? null : null}
+      onAdd={async (item) => { await addLiabilityMutation.mutateAsync(item); }}
+      onUpdate={async (item) => { await updateLiabilityMutation.mutateAsync(item); }}
+      onDelete={async (item) => { await deleteLiabilityMutation.mutateAsync({ id: item.id }); }}
+    />
   );
 };
 
