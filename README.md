@@ -203,7 +203,7 @@ npm run dev
 #### 3. Frontend Setup
 
 ```bash
-# Install storybook/test and storybook/jest
+# Install storybook/test
 npm install @storybook/test --save-dev
 
 # Navigate to frontend directory
