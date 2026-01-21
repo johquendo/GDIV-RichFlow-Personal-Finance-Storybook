@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { IncomeLine } from '../../types/income.types';
 
-interface Props {
+export interface Props {
   income?: IncomeLine | null;
   onSubmit: (name: string, amount: number, type: 'Earned' | 'Portfolio' | 'Passive') => void;
   onCancel: () => void;
