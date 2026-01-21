@@ -1,7 +1,6 @@
 // LiabilitiesSection.stories.tsx
 import type { Meta, StoryObj } from '@storybook/react';
-import { within, userEvent, waitFor, fn } from '@storybook/test';
-import { expect } from '@storybook/jest';
+import { within, userEvent, waitFor, fn, expect } from '@storybook/test';
 import React, { useState } from 'react';
 import '../../styles/globals.css';
 
