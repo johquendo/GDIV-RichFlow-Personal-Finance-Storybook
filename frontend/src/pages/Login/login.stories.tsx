@@ -230,3 +230,46 @@ export const InvalidCredentials: Story = {
     });
   },
 };
+
+export const SuccessfulLogin: Story = {
+  ...Template,
+  name: 'Successful Login',
+  render: function Render(args) {
+    const mockAuth = {
+      login: fn(() => Promise.resolve({
+        user: { name: 'John Doe', email: 'example@example.com'}
+      })),
+      isAuthenticated: false,
+      loading: false,
+      user: null,
+      isAdmin: false,
+    };
+    
+    return (
+      <BrowserRouter>
+        <MockAuthContext.Provider value={mockAuth}>
+          <div style={{ 
+            minHeight: '100vh', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            backgroundColor: '#f5f5f5'
+          }}>
+            <LoginStoryComponent {...args} />
+          </div>
+        </MockAuthContext.Provider>
+      </BrowserRouter>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    
+    await userEvent.type(canvas.getByPlaceholderText('Email'), 'example@example.com');
+    await userEvent.type(canvas.getByPlaceholderText('Password'), 'password123');
+    await userEvent.click(canvas.getByRole('button', { name: /log in/i }));
+    
+    await waitFor(() => {
+      expect(canvas.getByRole('button')).not.toHaveTextContent('Loading...');
+    });
+  },
+};
