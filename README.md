@@ -217,6 +217,10 @@ echo "REACT_APP_API_URL=http://localhost:5000/api" > .env
 
 # Start development server
 npm run dev
+
+# Open Storybook
+npm run storybook
+
 ```
 
 #### 4. Access the Application
