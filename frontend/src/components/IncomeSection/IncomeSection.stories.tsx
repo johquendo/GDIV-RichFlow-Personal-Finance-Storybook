@@ -256,7 +256,7 @@ export const DeleteEarnedIncome: Story = {
     await expect(itemToDelete).toBeInTheDocument();
 
     // Visual pause
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Click Delete
     const deleteButton = await canvas.getByText('✕');
